@@ -1,0 +1,6 @@
+{
+  "name": "Juan's Kitchen",
+  "description": "A modern commerce storefront and merchant dashboard for ordering Filipino food, treats, and goods with real-time order tracking and store management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
