@@ -132,6 +132,7 @@ export function useMerchantOrderRealtime({
 interface UseCustomerOrderRealtimeOptions {
   orderId?: string | null;
   merchantId?: string;
+  trackingToken?: string;
   enabled?: boolean;
   onStatusChange?: (newStatus: OrderStatus, fullOrder: Order) => void;
   onOrderUpdated?: (order: Order) => void;
@@ -143,18 +144,74 @@ interface UseCustomerOrderRealtimeOptions {
 export function useCustomerOrderRealtime({
   orderId,
   merchantId,
+  trackingToken,
   enabled = true,
   onStatusChange,
   onOrderUpdated
 }: UseCustomerOrderRealtimeOptions) {
   const onStatusChangeRef = useRef(onStatusChange);
   const onOrderUpdatedRef = useRef(onOrderUpdated);
+  const trackingTokenRef = useRef(trackingToken);
+  const lastStatusRef = useRef<OrderStatus | null>(null);
 
   useEffect(() => {
     onStatusChangeRef.current = onStatusChange;
     onOrderUpdatedRef.current = onOrderUpdated;
+    trackingTokenRef.current = trackingToken;
   });
 
+  // Polling fallback (essential for guest orders subject to strict RLS)
+  useEffect(() => {
+    if (!enabled || !orderId) {
+      return;
+    }
+
+    let isSubscribed = true;
+    let pollInterval: NodeJS.Timeout | null = null;
+
+    const checkStatus = async () => {
+      if (!isSubscribed) return;
+      try {
+        const order = await orderService.getOrderById(orderId, merchantId, trackingTokenRef.current);
+        if (order && isSubscribed) {
+          if (lastStatusRef.current !== order.status) {
+            lastStatusRef.current = order.status;
+            if (onStatusChangeRef.current) {
+              onStatusChangeRef.current(order.status, order);
+            }
+          }
+          if (onOrderUpdatedRef.current) {
+            onOrderUpdatedRef.current(order);
+          }
+
+          // If order has reached a terminal status, stop continuous polling
+          if (['completed', 'declined', 'cancelled'].includes(order.status)) {
+            if (pollInterval) {
+              clearInterval(pollInterval);
+              pollInterval = null;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[useCustomerOrderRealtime] Polling error:', err);
+      }
+    };
+
+    // Initial check
+    checkStatus();
+
+    // Poll every 5 seconds for live status updates
+    pollInterval = setInterval(checkStatus, 5000);
+
+    return () => {
+      isSubscribed = false;
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [orderId, merchantId, enabled]);
+
+  // Realtime subscription via Supabase Channel
   useEffect(() => {
     if (!enabled || !orderId || !isSupabaseConfigured || !supabase) {
       return;
@@ -177,11 +234,14 @@ export function useCustomerOrderRealtime({
           if (!dbOrder || !dbOrder.id) return;
 
           try {
-            const fullOrder = await orderService.getOrderById(dbOrder.id, merchantId);
+            const fullOrder = await orderService.getOrderById(dbOrder.id, merchantId, trackingTokenRef.current);
             const resolvedOrder: Order = fullOrder || mapDbOrderToOrder(dbOrder, []);
 
-            if (onStatusChangeRef.current) {
-              onStatusChangeRef.current(resolvedOrder.status, resolvedOrder);
+            if (lastStatusRef.current !== resolvedOrder.status) {
+              lastStatusRef.current = resolvedOrder.status;
+              if (onStatusChangeRef.current) {
+                onStatusChangeRef.current(resolvedOrder.status, resolvedOrder);
+              }
             }
             if (onOrderUpdatedRef.current) {
               onOrderUpdatedRef.current(resolvedOrder);

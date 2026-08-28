@@ -122,6 +122,7 @@ export interface DbOrder {
   delivery_fee: number;
   total: number;
   status: 'pending' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'declined' | 'cancelled';
+  tracking_token?: string;
   estimated_time: string;
   created_at: string;
   updated_at?: string;
@@ -339,6 +340,7 @@ export function mapDbOrderToOrder(db: DbOrder, items: DbOrderItem[] = []): Order
     deliveryFee: Number(db.delivery_fee) || 0,
     total: Number(db.total) || 0,
     status: db.status,
+    trackingToken: db.tracking_token,
     createdAt: db.created_at,
     timeAgo: timeAgoStr,
     estimatedTime: db.estimated_time || '30-45 mins'

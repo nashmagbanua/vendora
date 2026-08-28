@@ -85,6 +85,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
           productId: item.product.id,
           title: item.product.name,
           optionsDescription: optionSummaries.join(', ') || 'Standard',
+          selectedOptions: item.selectedOptions,
           quantity: item.quantity,
           unitPrice: item.totalPrice / item.quantity,
           totalPrice: item.totalPrice

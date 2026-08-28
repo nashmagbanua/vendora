@@ -7,15 +7,15 @@
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-SECURITY DEFINER SET search_path = public
+SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role)
+  INSERT INTO public.profiles (id, email, full_name)
   VALUES (
     NEW.id,
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'fullName', split_part(NEW.email, '@', 1)),
-    'owner'
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'fullName', split_part(NEW.email, '@', 1))
   )
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
@@ -55,7 +55,8 @@ CREATE OR REPLACE FUNCTION public.create_merchant_with_owner(
 )
 RETURNS JSONB
 LANGUAGE plpgsql
-SECURITY DEFINER SET search_path = public
+SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_user_id UUID;
@@ -82,8 +83,12 @@ BEGIN
   END IF;
 
   -- Ensure user profile exists
-  INSERT INTO public.profiles (id, email, full_name, role)
-  SELECT v_user_id, auth.jwt()->>'email', COALESCE(auth.jwt()->'user_metadata'->>'full_name', 'Merchant Owner'), 'owner'
+  INSERT INTO public.profiles (id, email, full_name)
+  VALUES (
+    v_user_id,
+    auth.jwt()->>'email',
+    COALESCE(auth.jwt()->'user_metadata'->>'full_name', 'Merchant Owner')
+  )
   ON CONFLICT (id) DO NOTHING;
 
   -- Create merchant record

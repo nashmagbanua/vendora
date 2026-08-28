@@ -126,6 +126,9 @@ export interface OrderItemRecord {
   productId?: string;
   title: string;
   optionsDescription?: string;
+  selectedOptions?: {
+    [groupId: string]: string | string[];
+  };
   quantity: number;
   unitPrice: number;
   totalPrice: number;
@@ -164,12 +167,14 @@ export interface Order {
   address: string;
   paymentMethod: PaymentMethod;
   paymentStatus?: PaymentStatus;
+  paymentReference?: string;
   notes?: string;
   items: OrderItemRecord[];
   subtotal: number;
   deliveryFee: number;
   total: number;
   status: OrderStatus;
+  trackingToken?: string;
   createdAt: string;
   timeAgo?: string;
   estimatedTime: string;

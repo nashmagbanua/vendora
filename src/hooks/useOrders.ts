@@ -7,13 +7,14 @@ import { useMerchantOrderRealtime } from './useOrderRealtime';
 interface UseOrdersOptions {
   onIncomingOrder?: (order: Order) => void;
   enableRealtime?: boolean;
+  isMerchantAuthenticated?: boolean;
 }
 
 export function useOrders(
   merchantId: string = DEFAULT_MERCHANT_ID,
   options: UseOrdersOptions = {}
 ) {
-  const { onIncomingOrder, enableRealtime = true } = options;
+  const { onIncomingOrder, enableRealtime = true, isMerchantAuthenticated = false } = options;
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,14 +23,16 @@ export function useOrders(
     try {
       setLoading(true);
       setError(null);
-      const data = await orderService.getOrders(merchantId);
+      const data = isMerchantAuthenticated
+        ? await orderService.getOrders(merchantId)
+        : await orderService.getGuestOrders(merchantId);
       setOrders(data);
     } catch (err: any) {
       setError(err?.message || 'Failed to load orders');
     } finally {
       setLoading(false);
     }
-  }, [merchantId]);
+  }, [merchantId, isMerchantAuthenticated]);
 
   useEffect(() => {
     refreshOrders();

@@ -71,6 +71,7 @@ export default function App() {
     advanceOrderStatus,
     setOrders
   } = useOrders(merchantId, {
+    isMerchantAuthenticated: auth.isAuthenticated,
     onIncomingOrder: (newOrder) => {
       // Trigger visual toast notification
       setIncomingOrderNotification(newOrder);
@@ -98,6 +99,7 @@ export default function App() {
   useCustomerOrderRealtime({
     orderId: activeConfirmedOrder?.id,
     merchantId,
+    trackingToken: activeConfirmedOrder?.trackingToken,
     enabled: Boolean(activeConfirmedOrder?.id),
     onOrderUpdated: (updated) => {
       setActiveConfirmedOrder(updated);

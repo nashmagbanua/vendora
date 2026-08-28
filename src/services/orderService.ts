@@ -10,6 +10,39 @@ import {
 } from '../lib/dbMappers';
 
 const ORDERS_STORAGE_KEY = 'vendora_orders_cache';
+const GUEST_TOKENS_KEY = 'vendora_guest_order_tokens';
+
+interface StoredGuestToken {
+  orderId: string;
+  trackingToken: string;
+  merchantId?: string;
+  createdAt: string;
+}
+
+function getStoredGuestTokens(): StoredGuestToken[] {
+  try {
+    const raw = localStorage.getItem(GUEST_TOKENS_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error('Failed to read guest order tokens from localStorage', e);
+  }
+  return [];
+}
+
+function saveGuestToken(orderId: string, trackingToken: string, merchantId?: string): void {
+  try {
+    const existing = getStoredGuestTokens().filter((t) => t.orderId !== orderId);
+    const updated: StoredGuestToken[] = [
+      { orderId, trackingToken, merchantId, createdAt: new Date().toISOString() },
+      ...existing
+    ].slice(0, 50);
+    localStorage.setItem(GUEST_TOKENS_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.error('Failed to store guest order token', e);
+  }
+}
 
 function getStoredOrders(): Order[] {
   try {
@@ -69,11 +102,22 @@ export const orderService = {
   },
 
   /**
-   * Fetch order by ID including item snapshots
+   * Fetch order by ID or Tracking Token including item snapshots
    */
-  async getOrderById(id: string, merchantId: string = DEFAULT_MERCHANT_ID): Promise<Order | null> {
+  async getOrderById(id: string, merchantId: string = DEFAULT_MERCHANT_ID, trackingToken?: string): Promise<Order | null> {
     if (isSupabaseConfigured && supabase) {
       try {
+        // If tracking token is provided, attempt secure RPC lookup
+        if (trackingToken) {
+          const { data: rpcData, error: rpcErr } = await supabase.rpc('get_order_by_tracking_token', {
+            p_order_id: id,
+            p_tracking_token: trackingToken
+          });
+          if (!rpcErr && rpcData) {
+            return rpcData as Order;
+          }
+        }
+
         const { data: dbOrder, error: orderErr } = await supabase
           .from('orders')
           .select('*')
@@ -98,24 +142,98 @@ export const orderService = {
   },
 
   /**
-   * Create a new customer order with immutable item snapshots
+   * Fetch recent orders placed by guest customer using stored tracking tokens
+   */
+  async getGuestOrders(merchantId: string = DEFAULT_MERCHANT_ID): Promise<Order[]> {
+    const tokens = getStoredGuestTokens();
+    const guestTokens = tokens.filter((t) => !t.merchantId || t.merchantId === merchantId);
+    
+    if (guestTokens.length === 0) {
+      const all = getStoredOrders();
+      return all.filter((o) => (o.merchantId ? o.merchantId === merchantId : true));
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const fetchedOrders: Order[] = [];
+        for (const tokenItem of guestTokens) {
+          const order = await this.getOrderById(tokenItem.orderId, merchantId, tokenItem.trackingToken);
+          if (order) {
+            fetchedOrders.push(order);
+          }
+        }
+        if (fetchedOrders.length > 0) {
+          setStoredOrders(fetchedOrders);
+          return fetchedOrders;
+        }
+      } catch (err) {
+        console.warn('Failed to fetch guest orders via tokens, falling back to local cache:', err);
+      }
+    }
+
+    const all = getStoredOrders();
+    return all.filter((o) => (o.merchantId ? o.merchantId === merchantId : true));
+  },
+
+  /**
+   * Create a new customer order with server-side pricing validation and immutable snapshots
    */
   async createOrder(
-    orderData: Omit<Order, 'id' | 'createdAt'> & { id?: string; createdAt?: string },
+    orderData: Omit<Order, 'id' | 'createdAt'> & { id?: string; createdAt?: string; trackingToken?: string },
     merchantId: string = DEFAULT_MERCHANT_ID
   ): Promise<Order> {
     const generatedId = orderData.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `order-${Date.now()}`);
+    const fallbackToken = orderData.trackingToken || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : `token-${Date.now()}`);
+    
     const newOrder: Order = {
       ...orderData,
       id: generatedId,
       merchantId,
+      trackingToken: fallbackToken,
       createdAt: orderData.createdAt || new Date().toISOString(),
       timeAgo: 'Just now',
-      paymentStatus: orderData.paymentStatus || (orderData.paymentMethod === 'cod' ? 'pending' : 'pending')
+      paymentStatus: orderData.paymentStatus || 'pending'
     };
 
     if (isSupabaseConfigured && supabase) {
       try {
+        // Transform selectedOptions into exact JSONB structure expected by create_secure_order
+        const itemsPayload = (newOrder.items || []).map((item) => ({
+          product_id: item.productId,
+          quantity: Math.max(1, Math.min(item.quantity || 1, 99)),
+          options_description: item.optionsDescription || 'Standard',
+          selected_options: item.selectedOptions || {}
+        }));
+
+        // Attempt creation via the atomic, server-validated RPC
+        const { data: createdOrderRpc, error: rpcErr } = await supabase.rpc('create_secure_order', {
+          p_merchant_id: merchantId,
+          p_customer_name: newOrder.customerName,
+          p_phone: newOrder.phone,
+          p_email: newOrder.email || null,
+          p_fulfillment: newOrder.fulfillment,
+          p_address: newOrder.address,
+          p_payment_method: newOrder.paymentMethod,
+          p_notes: newOrder.notes || null,
+          p_items: itemsPayload,
+          p_order_number: newOrder.orderNumber || null
+        });
+
+        if (!rpcErr && createdOrderRpc) {
+          const verifiedOrder = createdOrderRpc as Order;
+          if (verifiedOrder.trackingToken) {
+            saveGuestToken(verifiedOrder.id, verifiedOrder.trackingToken, merchantId);
+          }
+          const all = getStoredOrders();
+          setStoredOrders([verifiedOrder, ...all.filter((o) => o.id !== verifiedOrder.id)]);
+          return verifiedOrder;
+        }
+
+        if (rpcErr) {
+          console.warn('create_secure_order RPC returned error:', rpcErr);
+        }
+
+        // Direct table fallback if RPC is not yet applied
         const dbPayload = mapOrderToDb(newOrder, merchantId);
         const { data: insertedOrder, error: insertErr } = await supabase
           .from('orders')
@@ -128,14 +246,17 @@ export const orderService = {
 
           // Insert order items snapshots
           if (newOrder.items && newOrder.items.length > 0) {
-            const itemsPayload = newOrder.items.map((item) =>
+            const itemsRows = newOrder.items.map((item) =>
               mapOrderItemToDb(item, orderId, merchantId)
             );
-            await supabase.from('order_items').insert(itemsPayload);
+            await supabase.from('order_items').insert(itemsRows);
           }
 
-          const fullOrder = await this.getOrderById(orderId, merchantId);
+          const fullOrder = await this.getOrderById(orderId, merchantId, fallbackToken);
           if (fullOrder) {
+            if (fullOrder.trackingToken) {
+              saveGuestToken(fullOrder.id, fullOrder.trackingToken, merchantId);
+            }
             const all = getStoredOrders();
             setStoredOrders([fullOrder, ...all.filter((o) => o.id !== fullOrder.id)]);
             return fullOrder;
@@ -146,6 +267,7 @@ export const orderService = {
       }
     }
 
+    saveGuestToken(newOrder.id, fallbackToken, merchantId);
     const all = getStoredOrders();
     const updated = [newOrder, ...all.filter((o) => o.id !== newOrder.id)];
     setStoredOrders(updated);
