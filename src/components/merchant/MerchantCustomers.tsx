@@ -1,71 +1,36 @@
-import React, { useState } from 'react';
-import { Order, StoreSettings } from '../../types';
+import React, { useState, useMemo } from 'react';
+import { Order, StoreSettings, Customer } from '../../types';
+import { INITIAL_CUSTOMERS } from '../../data/initialData';
+import { customerService } from '../../services/customerService';
 import { Search, Phone, MapPin, Heart, MessageCircle } from 'lucide-react';
 
 interface MerchantCustomersProps {
   orders: Order[];
   settings: StoreSettings;
-}
-
-interface CustomerInfo {
-  name: string;
-  phone: string;
-  address: string;
-  totalOrders: number;
-  totalSpent: number;
-  lastOrderDate: string;
+  customers?: Customer[];
 }
 
 export const MerchantCustomers: React.FC<MerchantCustomersProps> = ({
   orders,
-  settings
+  settings,
+  customers = INITIAL_CUSTOMERS
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Group customer stats from orders
-  const customerMap: Record<string, CustomerInfo> = orders.reduce((acc, order) => {
-    const key = order.customerName.toLowerCase();
-    if (!acc[key]) {
-      acc[key] = {
-        name: order.customerName,
-        phone: order.phone,
-        address: order.address,
-        totalOrders: 0,
-        totalSpent: 0,
-        lastOrderDate: order.createdAt
-      };
-    }
-    acc[key].totalOrders += 1;
-    acc[key].totalSpent += order.total;
-    return acc;
-  }, {} as Record<string, CustomerInfo>);
+  const derivedCustomers = useMemo(() => {
+    return customerService.deriveCustomersFromOrders(orders, customers);
+  }, [orders, customers]);
 
-  // Add sample regulars if list is short
-  if (!customerMap['maria santos']) {
-    customerMap['maria santos'] = {
-      name: 'Maria Santos',
-      phone: '0917 123 4567',
-      address: '123 Sampaguita St., Makati City',
-      totalOrders: 6,
-      totalSpent: 2850,
-      lastOrderDate: new Date().toISOString()
-    };
-  }
-  if (!customerMap['jose rizal']) {
-    customerMap['jose rizal'] = {
-      name: 'Jose Rizal',
-      phone: '0918 987 6543',
-      address: '456 Ilustrado Ave., Manila',
-      totalOrders: 4,
-      totalSpent: 1980,
-      lastOrderDate: new Date(Date.now() - 86400000).toISOString()
-    };
-  }
-
-  const customersList: CustomerInfo[] = (Object.values(customerMap) as CustomerInfo[]).filter((c) =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.phone.includes(searchQuery)
-  );
+  const customersList = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return derivedCustomers;
+    return derivedCustomers.filter(
+      (c) =>
+        c.fullName.toLowerCase().includes(query) ||
+        c.phone.toLowerCase().includes(query) ||
+        (c.address && c.address.toLowerCase().includes(query))
+    );
+  }, [derivedCustomers, searchQuery]);
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-32 text-[#e0e0e2]">
@@ -90,19 +55,19 @@ export const MerchantCustomers: React.FC<MerchantCustomersProps> = ({
 
       {/* Customer Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {customersList.map((customer, idx) => (
+        {customersList.map((customer) => (
           <div
-            key={idx}
+            key={customer.id}
             className="bg-[#0e0f17] rounded-3xl border border-[#1f202e] shadow-md hover:border-[#2e3048] transition-all p-6 flex flex-col justify-between"
           >
             <div>
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-[#181926] text-[#818cf8] border border-[#2e3048] flex items-center justify-center font-bold text-[16px] shrink-0">
-                    {customer.name.charAt(0)}
+                    {customer.fullName.charAt(0)}
                   </div>
                   <div>
-                    <h3 className="text-[17px] font-bold text-white">{customer.name}</h3>
+                    <h3 className="text-[17px] font-bold text-white">{customer.fullName}</h3>
                     <div className="flex items-center gap-1 text-[12px] text-[#9496a1] mt-0.5">
                       <Phone className="w-3 h-3 text-[#6b7280]" />
                       <span>{customer.phone}</span>
@@ -110,22 +75,24 @@ export const MerchantCustomers: React.FC<MerchantCustomersProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 bg-[#fb7185]/10 border border-[#fb7185]/20 text-[#fb7185] px-2.5 py-1 rounded-full text-[11px] font-bold">
-                  <Heart className="w-3 h-3 fill-current" />
-                  <span>VIP Regular</span>
-                </div>
+                {(customer.totalOrders || 0) >= 3 && (
+                  <div className="flex items-center gap-1 bg-[#fb7185]/10 border border-[#fb7185]/20 text-[#fb7185] px-2.5 py-1 rounded-full text-[11px] font-bold">
+                    <Heart className="w-3 h-3 fill-current" />
+                    <span>VIP Regular</span>
+                  </div>
+                )}
               </div>
 
               {/* Stats */}
               <div className="grid grid-cols-2 gap-3 bg-[#13141f] p-3.5 rounded-2xl border border-[#1f202e] mb-4 text-center">
                 <div>
                   <span className="text-[11px] font-bold text-[#9496a1] uppercase block">Total Orders</span>
-                  <span className="text-[18px] font-bold text-[#818cf8]">{customer.totalOrders}</span>
+                  <span className="text-[18px] font-bold text-[#818cf8]">{customer.totalOrders || 0}</span>
                 </div>
                 <div>
                   <span className="text-[11px] font-bold text-[#9496a1] uppercase block">Lifetime Value</span>
                   <span className="text-[18px] font-bold text-[#34d399]">
-                    {settings.currency}{customer.totalSpent.toLocaleString()}
+                    {settings.currency}{(customer.totalSpent || 0).toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -160,4 +127,3 @@ export const MerchantCustomers: React.FC<MerchantCustomersProps> = ({
     </div>
   );
 };
-

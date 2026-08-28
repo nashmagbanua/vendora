@@ -1,6 +1,6 @@
 import React from 'react';
-import { MerchantTab, StoreSettings } from '../../types';
-import { LayoutDashboard, Receipt, Package, Settings, Users, FolderTree, ArrowLeft } from 'lucide-react';
+import { MerchantTab, StoreSettings, User } from '../../types';
+import { LayoutDashboard, Receipt, Package, Settings, Users, FolderTree, ArrowLeft, LogOut, ShieldCheck } from 'lucide-react';
 
 interface MerchantSidebarProps {
   activeTab: MerchantTab;
@@ -9,6 +9,10 @@ interface MerchantSidebarProps {
   onToggleStoreStatus: () => void;
   onSwitchToCustomer: () => void;
   pendingOrdersCount: number;
+  user?: User | null;
+  role?: 'owner' | 'admin' | 'staff' | null;
+  isDemoMode?: boolean;
+  onSignOut?: () => void;
 }
 
 export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
@@ -17,7 +21,11 @@ export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
   settings,
   onToggleStoreStatus,
   onSwitchToCustomer,
-  pendingOrdersCount
+  pendingOrdersCount,
+  user,
+  role,
+  isDemoMode,
+  onSignOut
 }) => {
   return (
     <aside className="hidden lg:flex flex-col fixed left-0 top-0 h-full w-[280px] z-40 bg-[#0a0a0f] border-r border-[#1f202e] text-[#e0e0e2] select-none">
@@ -28,11 +36,24 @@ export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
             <span className="material-symbols-outlined text-[#818cf8] text-[24px] fill">restaurant</span>
           </div>
           <div className="flex flex-col min-w-0">
-            <h2 className="text-[18px] font-bold text-white truncate">
+            <h2 className="text-[17px] font-bold text-white truncate">
               {settings.storeName}
             </h2>
-            <span className="text-[12px] font-semibold text-[#fb923c]">{settings.plan}</span>
-            <span className="text-[11px] text-[#6b7280]">Merchant ID: {settings.merchantId}</span>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[11px] font-semibold text-[#fb923c] uppercase tracking-wider">
+                {role || 'owner'}
+              </span>
+              {isDemoMode && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#3b82f6]/20 text-[#60a5fa] border border-[#3b82f6]/30">
+                  Demo
+                </span>
+              )}
+            </div>
+            {user?.email && (
+              <span className="text-[11px] text-[#6b7280] truncate mt-0.5">
+                {user.email}
+              </span>
+            )}
           </div>
         </div>
 
@@ -137,15 +158,25 @@ export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
         </button>
       </div>
 
-      {/* Switch to Customer Storefront button at bottom */}
-      <div className="p-4 border-t border-[#1f202e]">
+      {/* Bottom Actions: View Storefront & Sign Out */}
+      <div className="p-4 border-t border-[#1f202e] space-y-2">
         <button
           onClick={onSwitchToCustomer}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#13141f] border border-[#1f202e] text-[#818cf8] hover:bg-[#181926] text-[13px] font-bold shadow-xs transition-all cursor-pointer"
+          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#13141f] border border-[#1f202e] text-[#818cf8] hover:bg-[#181926] text-[13px] font-bold shadow-xs transition-all cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>View Customer Storefront</span>
         </button>
+
+        {onSignOut && (
+          <button
+            onClick={onSignOut}
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-transparent hover:bg-[#1f1619] border border-transparent hover:border-[#3b1a1f] text-[#9496a1] hover:text-[#f87171] text-[12px] font-semibold transition-all cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
+        )}
       </div>
     </aside>
   );

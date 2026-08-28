@@ -105,11 +105,12 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
             {handleSwitch && (
               <button
                 onClick={handleSwitch}
-                className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-semibold text-[#c7d2fe] bg-[#181926] hover:bg-[#202234] border border-[#2e3048] transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-[12px] font-semibold text-[#c7d2fe] bg-[#181926] hover:bg-[#202234] border border-[#2e3048] transition-colors cursor-pointer"
                 title="Switch to Merchant Dashboard"
               >
                 <Store className="w-3.5 h-3.5 text-[#818cf8]" />
-                <span>Merchant View</span>
+                <span className="hidden sm:inline">Merchant View</span>
+                <span className="sm:hidden text-[11px]">Merchant</span>
               </button>
             )}
 

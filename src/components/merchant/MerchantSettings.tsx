@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StoreSettings } from '../../types';
 import { Store, MapPin, CreditCard, Sparkles, CheckCircle2, ShieldCheck } from 'lucide-react';
 
@@ -13,6 +13,10 @@ export const MerchantSettings: React.FC<MerchantSettingsProps> = ({
 }) => {
   const [formData, setFormData] = useState<StoreSettings>(settings);
   const [showSavedToast, setShowSavedToast] = useState(false);
+
+  useEffect(() => {
+    setFormData(settings);
+  }, [settings]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +101,7 @@ export const MerchantSettings: React.FC<MerchantSettingsProps> = ({
           <label className="block text-[13px] font-semibold text-[#9496a1] mb-2">Store Tagline / Description</label>
           <input
             type="text"
-            value={formData.storeDescription}
+            value={formData.storeDescription || ''}
             onChange={(e) => setFormData({ ...formData, storeDescription: e.target.value })}
             className="w-full bg-[#13141f] text-white text-[15px] border border-[#1f202e] rounded-xl px-4 py-3 focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
           />

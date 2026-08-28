@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { CartItem, StoreSettings, Order } from '../types';
+import { CartItem, StoreSettings, Order, Customer } from '../types';
 import { User, Truck, QrCode, Wallet, Banknote, FileText, ArrowRight, ArrowLeft } from 'lucide-react';
 
 interface CheckoutViewProps {
   cart: CartItem[];
   settings: StoreSettings;
+  initialCustomer?: Customer | null;
   onBackToCart: () => void;
   onOrderPlaced: (newOrder: Order) => void;
 }
@@ -12,45 +13,57 @@ interface CheckoutViewProps {
 export const CheckoutView: React.FC<CheckoutViewProps> = ({
   cart,
   settings,
+  initialCustomer,
   onBackToCart,
   onOrderPlaced
 }) => {
-  const [fullName, setFullName] = useState('Maria Santos');
-  const [phoneNumber, setPhoneNumber] = useState('0917 123 4567');
+  const [fullName, setFullName] = useState(initialCustomer?.fullName || '');
+  const [phoneNumber, setPhoneNumber] = useState(initialCustomer?.phone || '');
   const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>('delivery');
-  const [address, setAddress] = useState('123 Sampaguita St., Brgy. San Lorenzo, Makati City');
+  const [address, setAddress] = useState(initialCustomer?.address || '');
   const [paymentMethod, setPaymentMethod] = useState<'gcash' | 'maya' | 'cod'>('gcash');
   const [orderNotes, setOrderNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
   const deliveryFee = fulfillment === 'delivery' ? settings.deliveryFee : 0;
   const total = subtotal + deliveryFee;
 
+  const handleFillDemo = () => {
+    setFullName('Maria Santos');
+    setPhoneNumber('0917 123 4567');
+    setAddress('123 Sampaguita St., Brgy. San Lorenzo, Makati City');
+    setValidationError(null);
+  };
+
   const handlePlaceOrder = () => {
+    setValidationError(null);
     if (!fullName.trim() || !phoneNumber.trim()) {
-      alert('Please provide your name and phone number.');
+      setValidationError('Please provide your name and phone number to place the order.');
       return;
     }
     if (fulfillment === 'delivery' && !address.trim()) {
-      alert('Please enter a delivery address.');
+      setValidationError('Please enter a delivery address for order dispatch.');
       return;
     }
 
     setIsSubmitting(true);
 
     const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const orderNum = `#JK-${randomSuffix}`;
+    const orderNum = `#${settings.storeName ? settings.storeName.substring(0, 2).toUpperCase() : 'ORD'}-${randomSuffix}`;
 
     const newOrder: Order = {
       id: `order-${Date.now()}`,
+      merchantId: settings.merchantId || '8829',
       orderNumber: orderNum,
-      customerName: fullName,
-      phone: phoneNumber,
+      customerName: fullName.trim(),
+      phone: phoneNumber.trim(),
       fulfillment,
-      address: fulfillment === 'delivery' ? address : 'Store Pickup (Ayala Food Hall)',
+      address: fulfillment === 'delivery' ? address.trim() : `Store Pickup (${settings.address})`,
       paymentMethod,
-      notes: orderNotes,
+      paymentStatus: paymentMethod === 'cod' ? 'pending' : 'paid',
+      notes: orderNotes.trim(),
       items: cart.map((item) => {
         const optionSummaries: string[] = [];
         item.product.optionGroups.forEach((group) => {
@@ -89,7 +102,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     setTimeout(() => {
       setIsSubmitting(false);
       onOrderPlaced(newOrder);
-    }, 600);
+    }, 500);
   };
 
   return (
@@ -121,14 +134,31 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       {/* Main Content */}
       <main className="pt-20 px-4 md:px-8 max-w-3xl mx-auto space-y-6">
         {/* Merchant Preview Banner */}
-        <div className="bg-[#0e0f17] rounded-2xl p-4 flex items-start gap-3 border border-[#27273a] border-dashed shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
-          <span className="material-symbols-outlined text-[#818cf8] mt-0.5 text-[22px]">edit_note</span>
-          <div>
-            <p className="text-[13px] text-[#e0e0e2] leading-relaxed">
-              <strong className="text-white">Merchant Preview Mode.</strong> This is how customers see your checkout. You can configure required fields and payment options in Settings.
-            </p>
+        <div className="bg-[#0e0f17] rounded-2xl p-4 flex items-start justify-between gap-3 border border-[#27273a] border-dashed shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
+          <div className="flex items-start gap-3">
+            <span className="material-symbols-outlined text-[#818cf8] mt-0.5 text-[22px]">storefront</span>
+            <div>
+              <p className="text-[13px] text-[#e0e0e2] leading-relaxed">
+                <strong className="text-white">{settings.storeName || "Store"} Checkout</strong> • Multi-tenant guest order pipeline.
+              </p>
+            </div>
           </div>
+          {(!fullName || !phoneNumber) && (
+            <button
+              type="button"
+              onClick={handleFillDemo}
+              className="text-[12px] font-semibold text-[#818cf8] bg-[#181926] border border-[#27273a] px-3 py-1 rounded-lg hover:bg-[#202234] transition-colors whitespace-nowrap cursor-pointer"
+            >
+              Fill Demo Info
+            </button>
+          )}
         </div>
+
+        {validationError && (
+          <div className="p-4 bg-red-950/40 border border-red-800/60 rounded-2xl text-red-300 text-[14px]">
+            {validationError}
+          </div>
+        )}
 
         {/* Contact Information */}
         <section className="bg-[#0e0f17] rounded-3xl p-6 border border-[#1f202e] shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
@@ -146,7 +176,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Juan Dela Cruz"
+                placeholder="e.g. Maria Santos"
                 className="w-full bg-[#13141f] text-white rounded-xl border border-[#27273a] px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#6366f1] transition-all"
               />
             </div>
@@ -159,7 +189,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 type="tel"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="09XX XXX XXXX"
+                placeholder="0917 123 4567"
                 className="w-full bg-[#13141f] text-white rounded-xl border border-[#27273a] px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#6366f1] transition-all"
               />
             </div>
@@ -210,7 +240,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 rows={3}
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="Enter complete address, landmarks, etc."
+                placeholder="Enter complete address, landmarks, street name, etc."
                 className="w-full bg-[#13141f] text-white rounded-xl border border-[#27273a] px-4 py-3 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#6366f1] transition-all resize-none"
               />
             </div>
@@ -380,4 +410,3 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     </div>
   );
 };
-

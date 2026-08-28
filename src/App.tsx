@@ -6,15 +6,18 @@ import {
   Product,
   Category,
   Order,
-  StoreSettings,
-  CartItem
+  StoreSettings
 } from './types';
-import {
-  INITIAL_PRODUCTS,
-  INITIAL_CATEGORIES,
-  INITIAL_ORDERS,
-  INITIAL_SETTINGS
-} from './data/initialData';
+import { DEFAULT_MERCHANT_ID } from './data/initialData';
+
+// Custom Hooks for Architecture Layering
+import { useAuth } from './hooks/useAuth';
+import { useCart } from './hooks/useCart';
+import { useProducts } from './hooks/useProducts';
+import { useOrders } from './hooks/useOrders';
+import { useMerchant } from './hooks/useMerchant';
+import { useStoreSettings } from './hooks/useStoreSettings';
+import { useCustomerOrderRealtime } from './hooks/useOrderRealtime';
 
 // Customer Components
 import { CustomerHeader } from './components/CustomerHeader';
@@ -39,43 +42,51 @@ import { MerchantCategories } from './components/merchant/MerchantCategories';
 import { MerchantCustomers } from './components/merchant/MerchantCustomers';
 import { MerchantSettings } from './components/merchant/MerchantSettings';
 import { MerchantBottomNav } from './components/merchant/MerchantBottomNav';
+import { MerchantAuthModal } from './components/merchant/MerchantAuthModal';
+import { OrderNotificationToast } from './components/merchant/OrderNotificationToast';
 
 export default function App() {
-  // Mode & Tabs
+  // Navigation & Mode States
   const [mode, setMode] = useState<AppMode>('customer');
   const [customerTab, setCustomerTab] = useState<CustomerTab>('home');
   const [merchantTab, setMerchantTab] = useState<MerchantTab>('home');
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [incomingOrderNotification, setIncomingOrderNotification] = useState<Order | null>(null);
 
-  // Application Data States
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
-  const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
-  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
-  const [settings, setSettings] = useState<StoreSettings>(INITIAL_SETTINGS);
+  // Authentication State
+  const auth = useAuth();
 
-  // Cart & Flow States
-  const [cart, setCart] = useState<CartItem[]>([
-    {
-      cartItemId: 'initial-1',
-      product: INITIAL_PRODUCTS[0], // Chicken Adobo
-      quantity: 1,
-      selectedOptions: {
-        'group-rice': 'opt-white',
-        'group-spice': 'opt-spicy'
-      },
-      totalPrice: 270
-    },
-    {
-      cartItemId: 'initial-2',
-      product: INITIAL_PRODUCTS[4], // Floral Summer Dress
-      quantity: 1,
-      selectedOptions: {
-        'group-size': 'opt-m',
-        'group-color': 'opt-rose'
-      },
-      totalPrice: 599
+  // Active Merchant ID determination
+  const activeMerchantId = auth.merchant?.id || (auth.isDemoMode || !auth.isAuthenticated ? DEFAULT_MERCHANT_ID : '');
+
+  // Business State Hooks
+  const { merchantId, categories, customers, addCategory, updateCategory, deleteCategory } = useMerchant(activeMerchantId);
+  const { settings, updateSettings, toggleStoreStatus } = useStoreSettings(merchantId);
+  const { products, saveProduct, toggleProductActive, deleteProduct } = useProducts(merchantId);
+  const {
+    orders,
+    pendingOrdersCount,
+    placeOrder,
+    updateOrderStatus,
+    advanceOrderStatus,
+    setOrders
+  } = useOrders(merchantId, {
+    onIncomingOrder: (newOrder) => {
+      // Trigger visual toast notification
+      setIncomingOrderNotification(newOrder);
     }
-  ]);
+  });
+  const {
+    cart,
+    cartTotalItems,
+    addToCart,
+    quickAddToCart,
+    updateQuantity,
+    removeItem,
+    clearCart
+  } = useCart();
 
+  // Modal and Flow States
   const [selectedProductForDetail, setSelectedProductForDetail] = useState<Product | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [inCheckout, setInCheckout] = useState(false);
@@ -83,143 +94,70 @@ export default function App() {
   const [selectedMerchantOrder, setSelectedMerchantOrder] = useState<Order | null>(null);
   const [viewingReceiptOrder, setViewingReceiptOrder] = useState<Order | null>(null);
 
-  // Computed Cart Items Count
-  const cartTotalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const pendingOrdersCount = orders.filter((o) => o.status === 'pending').length;
+  // Customer Realtime tracking for active order
+  useCustomerOrderRealtime({
+    orderId: activeConfirmedOrder?.id,
+    merchantId,
+    enabled: Boolean(activeConfirmedOrder?.id),
+    onOrderUpdated: (updated) => {
+      setActiveConfirmedOrder(updated);
+      setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+    }
+  });
+
+  // Mode Switch Handlers
+  const handleSwitchToMerchant = () => {
+    if (auth.isAuthenticated) {
+      setMode('merchant');
+    } else {
+      setShowAuthModal(true);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await auth.signOut();
+    setMode('customer');
+  };
 
   // Cart operations
-  const handleAddToCart = (
-    product: Product,
-    quantity: number,
-    selectedOptions: Record<string, string | string[]>,
-    calculatedTotalPrice: number
-  ) => {
-    const newItem: CartItem = {
-      cartItemId: `cart-${Date.now()}-${Math.random()}`,
-      product,
-      quantity,
-      selectedOptions,
-      totalPrice: calculatedTotalPrice
-    };
-    setCart((prev) => [...prev, newItem]);
-  };
-
   const handleQuickAddToCart = (product: Product) => {
-    // Check if product has required options
-    const hasRequired = product.optionGroups.some((g) => g.required);
-    if (hasRequired) {
-      setSelectedProductForDetail(product);
-      return;
-    }
-
-    const newItem: CartItem = {
-      cartItemId: `cart-${Date.now()}-${Math.random()}`,
-      product,
-      quantity: 1,
-      selectedOptions: {},
-      totalPrice: product.basePrice
-    };
-    setCart((prev) => [...prev, newItem]);
-  };
-
-  const handleUpdateCartQuantity = (cartItemId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      handleRemoveCartItem(cartItemId);
-      return;
-    }
-    setCart((prev) =>
-      prev.map((item) => {
-        if (item.cartItemId !== cartItemId) return item;
-        const unitPrice = item.totalPrice / item.quantity;
-        return {
-          ...item,
-          quantity: newQuantity,
-          totalPrice: unitPrice * newQuantity
-        };
-      })
-    );
-  };
-
-  const handleRemoveCartItem = (cartItemId: string) => {
-    setCart((prev) => prev.filter((item) => item.cartItemId !== cartItemId));
+    quickAddToCart(product, (p) => setSelectedProductForDetail(p));
   };
 
   // Order Placement
-  const handleOrderPlaced = (newOrder: Order) => {
-    setOrders((prev) => [newOrder, ...prev]);
-    setCart([]);
+  const handleOrderPlaced = async (newOrder: Order) => {
+    const created = await placeOrder(newOrder);
+    clearCart();
     setInCheckout(false);
-    setActiveConfirmedOrder(newOrder);
+    setActiveConfirmedOrder(created);
   };
 
-  // Order Status Tracking & Simulation
-  const handleAdvanceOrderStatus = (orderId: string) => {
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        let nextStatus: Order['status'] = o.status;
-        if (o.status === 'pending') nextStatus = 'accepted';
-        else if (o.status === 'accepted') nextStatus = 'preparing';
-        else if (o.status === 'preparing') nextStatus = 'ready';
-
-        const updated = { ...o, status: nextStatus };
-        if (activeConfirmedOrder && activeConfirmedOrder.id === orderId) {
-          setActiveConfirmedOrder(updated);
-        }
-        return updated;
-      })
-    );
+  // Status progression
+  const handleAdvanceOrderStatus = async (orderId: string) => {
+    const updated = await advanceOrderStatus(orderId);
+    if (activeConfirmedOrder && activeConfirmedOrder.id === orderId) {
+      setActiveConfirmedOrder(updated);
+    }
   };
 
-  const handleUpdateOrderStatus = (orderId: string, status: Order['status']) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status } : o))
-    );
+  const handleMerchantUpdateOrderStatus = async (orderId: string, status: Order['status']) => {
+    const updated = await updateOrderStatus(orderId, status);
     if (selectedMerchantOrder && selectedMerchantOrder.id === orderId) {
-      setSelectedMerchantOrder((prev) => (prev ? { ...prev, status } : null));
+      setSelectedMerchantOrder(updated);
     }
   };
 
-  // Product CRUD
-  const handleSaveProduct = (product: Product) => {
-    const exists = products.some((p) => p.id === product.id);
-    if (exists) {
-      setProducts((prev) => prev.map((p) => (p.id === product.id ? product : p)));
-    } else {
-      setProducts((prev) => [product, ...prev]);
-    }
+  // Product Save Flow
+  const handleSaveProduct = async (product: Product) => {
+    await saveProduct(product);
     setEditingProduct(null);
     setMerchantTab('products');
   };
 
-  const handleToggleProductActive = (productId: string) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, isActive: !p.isActive } : p))
-    );
-  };
-
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     if (confirm('Are you sure you want to delete this product?')) {
-      setProducts((prev) => prev.filter((p) => p.id !== productId));
+      await deleteProduct(productId);
     }
-  };
-
-  // Category CRUD
-  const handleAddCategory = (newCat: Category) => {
-    setCategories((prev) => [...prev, newCat]);
-  };
-
-  const handleUpdateCategory = (cat: Category) => {
-    setCategories((prev) => prev.map((c) => (c.id === cat.id ? cat : c)));
-  };
-
-  const handleDeleteCategory = (catId: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== catId));
-  };
-
-  // Mode & navigation helpers
-  const handleToggleStoreStatus = () => {
-    setSettings((prev) => ({ ...prev, isOpen: !prev.isOpen }));
   };
 
   return (
@@ -245,7 +183,7 @@ export default function App() {
                   setActiveConfirmedOrder(null);
                   setCustomerTab('cart');
                 }}
-                onSwitchToMerchant={() => setMode('merchant')}
+                onSwitchToMerchant={handleSwitchToMerchant}
                 activeTab={customerTab}
                 onChangeTab={(tab) => {
                   setActiveConfirmedOrder(null);
@@ -270,8 +208,8 @@ export default function App() {
                   <CartView
                     cart={cart}
                     settings={settings}
-                    onUpdateQuantity={handleUpdateCartQuantity}
-                    onRemoveItem={handleRemoveCartItem}
+                    onUpdateQuantity={updateQuantity}
+                    onRemoveItem={removeItem}
                     onProceedToCheckout={() => setInCheckout(true)}
                     onBackToShopping={() => setCustomerTab('home')}
                   />
@@ -313,7 +251,7 @@ export default function App() {
               product={selectedProductForDetail}
               settings={settings}
               onClose={() => setSelectedProductForDetail(null)}
-              onAddToCart={handleAddToCart}
+              onAddToCart={addToCart}
             />
           )}
 
@@ -336,9 +274,13 @@ export default function App() {
             activeTab={merchantTab}
             onChangeTab={(t) => setMerchantTab(t)}
             settings={settings}
-            onToggleStoreStatus={handleToggleStoreStatus}
+            onToggleStoreStatus={toggleStoreStatus}
             onSwitchToCustomer={() => setMode('customer')}
             pendingOrdersCount={pendingOrdersCount}
+            user={auth.user}
+            role={auth.role}
+            isDemoMode={auth.isDemoMode}
+            onSignOut={handleSignOut}
           />
 
           {/* Right Main Area */}
@@ -346,8 +288,11 @@ export default function App() {
             {/* Mobile/Tablet Header */}
             <MerchantHeader
               settings={settings}
-              onToggleStoreStatus={handleToggleStoreStatus}
+              onToggleStoreStatus={toggleStoreStatus}
               onSwitchToCustomer={() => setMode('customer')}
+              role={auth.role}
+              isDemoMode={auth.isDemoMode}
+              onSignOut={handleSignOut}
             />
 
             {/* Merchant Tab Content */}
@@ -376,7 +321,7 @@ export default function App() {
                     setEditingProduct(product);
                     setMerchantTab('add_product');
                   }}
-                  onToggleProductActive={handleToggleProductActive}
+                  onToggleProductActive={toggleProductActive}
                   onDeleteProduct={handleDeleteProduct}
                   onOpenCategories={() => setMerchantTab('categories')}
                 />
@@ -399,7 +344,7 @@ export default function App() {
                 <MerchantOrders
                   orders={orders}
                   settings={settings}
-                  onUpdateOrderStatus={handleUpdateOrderStatus}
+                  onUpdateOrderStatus={handleMerchantUpdateOrderStatus}
                   onViewOrderDetail={(order) => setSelectedMerchantOrder(order)}
                 />
               )}
@@ -408,20 +353,24 @@ export default function App() {
                 <MerchantCategories
                   categories={categories}
                   products={products}
-                  onAddCategory={handleAddCategory}
-                  onUpdateCategory={handleUpdateCategory}
-                  onDeleteCategory={handleDeleteCategory}
+                  onAddCategory={addCategory}
+                  onUpdateCategory={updateCategory}
+                  onDeleteCategory={deleteCategory}
                 />
               )}
 
               {merchantTab === 'customers' && (
-                <MerchantCustomers orders={orders} settings={settings} />
+                <MerchantCustomers
+                  orders={orders}
+                  settings={settings}
+                  customers={customers}
+                />
               )}
 
               {merchantTab === 'settings' && (
                 <MerchantSettings
                   settings={settings}
-                  onUpdateSettings={(newSet) => setSettings(newSet)}
+                  onUpdateSettings={(newSet: StoreSettings) => updateSettings(newSet)}
                 />
               )}
             </main>
@@ -443,12 +392,48 @@ export default function App() {
               order={selectedMerchantOrder}
               settings={settings}
               onClose={() => setSelectedMerchantOrder(null)}
-              onUpdateStatus={handleUpdateOrderStatus}
+              onUpdateStatus={handleMerchantUpdateOrderStatus}
+            />
+          )}
+
+          {/* Realtime Order Alert Toast */}
+          {incomingOrderNotification && (
+            <OrderNotificationToast
+              order={incomingOrderNotification}
+              settings={settings}
+              onViewOrder={(order) => {
+                setSelectedMerchantOrder(order);
+                setMerchantTab('orders');
+              }}
+              onDismiss={() => setIncomingOrderNotification(null)}
             />
           )}
         </div>
       )}
+
+      {/* ---------------- MERCHANT AUTH MODAL ---------------- */}
+      <MerchantAuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        isLoading={auth.isLoading}
+        error={auth.error}
+        onClearError={auth.clearError}
+        onSignIn={async (credentials) => {
+          await auth.signIn(credentials);
+          setShowAuthModal(false);
+          setMode('merchant');
+        }}
+        onSignUp={async (signUpData) => {
+          await auth.signUp(signUpData);
+          setShowAuthModal(false);
+          setMode('merchant');
+        }}
+        onEnableDemoMode={() => {
+          auth.enableDemoMode();
+          setShowAuthModal(false);
+          setMode('merchant');
+        }}
+      />
     </div>
   );
 }
-

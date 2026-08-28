@@ -1,19 +1,25 @@
 import React from 'react';
 import { StoreSettings } from '../../types';
-import { Store } from 'lucide-react';
+import { Store, LogOut } from 'lucide-react';
 
 interface MerchantHeaderProps {
   settings: StoreSettings;
   onToggleStoreStatus: () => void;
   onSwitchToCustomer: () => void;
   title?: string;
+  role?: 'owner' | 'admin' | 'staff' | null;
+  isDemoMode?: boolean;
+  onSignOut?: () => void;
 }
 
 export const MerchantHeader: React.FC<MerchantHeaderProps> = ({
   settings,
   onToggleStoreStatus,
   onSwitchToCustomer,
-  title
+  title,
+  role,
+  isDemoMode,
+  onSignOut
 }) => {
   return (
     <header className="fixed top-0 left-0 w-full z-40 flex justify-between items-center px-4 md:px-8 h-16 bg-[#0a0a0f] border-b border-[#1f202e] text-[#e0e0e2] shadow-xs pt-safe lg:hidden">
@@ -22,10 +28,15 @@ export const MerchantHeader: React.FC<MerchantHeaderProps> = ({
           <span className="material-symbols-outlined text-[#818cf8] text-[20px] fill">restaurant</span>
         </div>
         <div>
-          <h1 className="text-[17px] font-bold text-white truncate">
+          <h1 className="text-[16px] font-bold text-white truncate max-w-[140px] sm:max-w-none">
             {title || settings.storeName}
           </h1>
-          <span className="text-[11px] text-[#6b7280]">Merchant ID: {settings.merchantId}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-[#fb923c] uppercase">{role || 'owner'}</span>
+            {isDemoMode && (
+              <span className="text-[9px] font-bold text-[#60a5fa] bg-[#3b82f6]/20 px-1 rounded">Demo</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -41,7 +52,7 @@ export const MerchantHeader: React.FC<MerchantHeaderProps> = ({
 
         <button
           onClick={onToggleStoreStatus}
-          className={`font-semibold text-[13px] px-3.5 py-1.5 rounded-full transition-colors flex items-center gap-1 shadow-xs cursor-pointer ${
+          className={`font-semibold text-[12px] sm:text-[13px] px-3 sm:px-3.5 py-1.5 rounded-full transition-colors flex items-center gap-1 shadow-xs cursor-pointer ${
             settings.isOpen
               ? 'bg-[#4f46e5] text-white hover:bg-[#6366f1]'
               : 'bg-[#27273a] text-[#9496a1] hover:bg-[#323348]'
@@ -50,8 +61,20 @@ export const MerchantHeader: React.FC<MerchantHeaderProps> = ({
           <span>{settings.isOpen ? 'Open' : 'Closed'}</span>
           <span className="material-symbols-outlined text-[14px]">expand_more</span>
         </button>
+
+        {onSignOut && (
+          <button
+            onClick={onSignOut}
+            className="p-2 rounded-xl text-[#9496a1] hover:text-[#f87171] bg-[#13141f] border border-[#1f202e] cursor-pointer"
+            title="Sign Out"
+            aria-label="Sign Out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </header>
   );
 };
+
 
