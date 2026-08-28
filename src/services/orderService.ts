@@ -69,6 +69,8 @@ export const orderService = {
    * Fetch all orders for a merchant including historical item snapshots
    */
   async getOrders(merchantId: string = DEFAULT_MERCHANT_ID): Promise<Order[]> {
+    if (!merchantId) return [];
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data: dbOrders, error: orderErr } = await supabase
@@ -77,23 +79,35 @@ export const orderService = {
           .eq('merchant_id', merchantId)
           .order('created_at', { ascending: false });
 
-        if (!orderErr && dbOrders && dbOrders.length > 0) {
+        if (orderErr) {
+          console.warn('[orderService] Supabase orders fetch error:', orderErr.message);
+          return [];
+        }
+
+        if (dbOrders) {
+          if (dbOrders.length === 0) {
+            return [];
+          }
           const orderIds = dbOrders.map((o: DbOrder) => o.id);
-          const { data: dbItems } = await supabase
+          const { data: dbItems, error: itemsErr } = await supabase
             .from('order_items')
             .select('*')
             .in('order_id', orderIds);
+
+          if (itemsErr) {
+            console.warn('[orderService] Supabase order items error:', itemsErr.message);
+          }
 
           const mapped: Order[] = dbOrders.map((o: DbOrder) => {
             const items = (dbItems as DbOrderItem[] || []).filter((it) => it.order_id === o.id);
             return mapDbOrderToOrder(o, items);
           });
 
-          setStoredOrders(mapped);
           return mapped;
         }
       } catch (err) {
-        console.warn('Supabase orders fetch failed, using local store:', err);
+        console.warn('[orderService] Supabase orders fetch failed:', err);
+        return [];
       }
     }
 
@@ -122,7 +136,7 @@ export const orderService = {
           .from('orders')
           .select('*')
           .eq('id', id)
-          .single();
+          .maybeSingle();
 
         if (!orderErr && dbOrder) {
           const { data: dbItems } = await supabase
@@ -133,8 +147,9 @@ export const orderService = {
           return mapDbOrderToOrder(dbOrder as DbOrder, (dbItems as DbOrderItem[]) || []);
         }
       } catch (err) {
-        console.warn('Supabase getOrderById failed, using local store:', err);
+        console.warn('[orderService] Supabase getOrderById failed:', err);
       }
+      return null;
     }
 
     const orders = await this.getOrders(merchantId);
@@ -149,6 +164,9 @@ export const orderService = {
     const guestTokens = tokens.filter((t) => !t.merchantId || t.merchantId === merchantId);
     
     if (guestTokens.length === 0) {
+      if (isSupabaseConfigured && supabase) {
+        return [];
+      }
       const all = getStoredOrders();
       return all.filter((o) => (o.merchantId ? o.merchantId === merchantId : true));
     }
@@ -162,12 +180,10 @@ export const orderService = {
             fetchedOrders.push(order);
           }
         }
-        if (fetchedOrders.length > 0) {
-          setStoredOrders(fetchedOrders);
-          return fetchedOrders;
-        }
+        return fetchedOrders;
       } catch (err) {
-        console.warn('Failed to fetch guest orders via tokens, falling back to local cache:', err);
+        console.warn('[orderService] Failed to fetch guest orders via tokens:', err);
+        return [];
       }
     }
 

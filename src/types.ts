@@ -30,6 +30,15 @@ export interface MerchantSignUpData {
   address?: string;
 }
 
+export interface MerchantCreateStoreData {
+  storeName: string;
+  phone?: string;
+  address?: string;
+  currency?: string;
+  deliveryFee?: number;
+  description?: string;
+}
+
 export interface MerchantLoginCredentials {
   email: string;
   password: string;

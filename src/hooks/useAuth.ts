@@ -5,6 +5,7 @@ import {
   Merchant,
   MerchantMember,
   MerchantSignUpData,
+  MerchantCreateStoreData,
   MerchantLoginCredentials,
   AuthState
 } from '../types';
@@ -123,6 +124,19 @@ export function useAuth() {
     }
   }, []);
 
+  const createStore = useCallback(async (data: MerchantCreateStoreData) => {
+    setAuthState((prev) => ({ ...prev, isLoading: true, error: null }));
+    try {
+      const state = await authService.createStore(data);
+      setAuthState(state);
+      return state;
+    } catch (err: any) {
+      const errMsg = err?.message || 'Failed to create store. Please try again.';
+      setAuthState((prev) => ({ ...prev, isLoading: false, error: errMsg }));
+      throw err;
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
     setAuthState((prev) => ({ ...prev, isLoading: true }));
     try {
@@ -163,6 +177,7 @@ export function useAuth() {
     ...authState,
     signIn,
     signUp,
+    createStore,
     signOut,
     enableDemoMode,
     clearError

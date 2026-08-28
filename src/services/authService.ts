@@ -5,6 +5,7 @@ import {
   Merchant,
   MerchantMember,
   MerchantSignUpData,
+  MerchantCreateStoreData,
   MerchantLoginCredentials,
   AuthState
 } from '../types';
@@ -346,10 +347,94 @@ export const authService = {
 
     const resolved = await this.resolveUserData(authData.user.id, authData.user.email || credentials.email);
 
-    if (!resolved.merchant) {
-      throw new Error('No merchant membership found for this user account. Please sign up as a merchant owner.');
+    return {
+      ...resolved,
+      isLoading: false,
+      isDemoMode: false,
+      error: null
+    };
+  },
+
+  /**
+   * Create Store for already authenticated user who has no store yet
+   */
+  async createStore(data: MerchantCreateStoreData): Promise<AuthState> {
+    if (!this.isConfigured() || !supabase) {
+      const localMerchant: Merchant = {
+        id: `merchant-${Date.now()}`,
+        name: data.storeName,
+        slug: data.storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        createdAt: new Date().toISOString()
+      };
+      return {
+        user: DEMO_USER,
+        profile: DEMO_PROFILE,
+        merchant: localMerchant,
+        role: 'owner',
+        memberships: [{
+          id: `mem-${Date.now()}`,
+          merchantId: localMerchant.id,
+          userId: DEMO_USER.id,
+          role: 'owner'
+        }],
+        isAuthenticated: true,
+        isLoading: false,
+        isDemoMode: true,
+        error: null
+      };
     }
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('Authentication required to create a store.');
+    }
+
+    const slug = data.storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + user.id.substring(0, 6);
+
+    const { error: rpcError } = await supabase.rpc('create_merchant_with_owner', {
+      p_name: data.storeName,
+      p_slug: slug,
+      p_description: data.description || `Welcome to ${data.storeName}! Enjoy our best offerings.`,
+      p_currency: data.currency || '₱',
+      p_delivery_fee: data.deliveryFee ?? 50,
+      p_phone: data.phone || '+63 900 000 0000',
+      p_address: data.address || 'Metro Manila, Philippines'
+    });
+
+    if (rpcError) {
+      console.warn('[authService] RPC create_merchant_with_owner failed, trying direct insert:', rpcError.message);
+      const { data: insMerchant, error: mErr } = await supabase
+        .from('merchants')
+        .insert({
+          name: data.storeName,
+          slug,
+          owner_id: user.id
+        })
+        .select()
+        .single();
+
+      if (mErr || !insMerchant) {
+        throw new Error(rpcError?.message || mErr?.message || 'Failed to create merchant.');
+      }
+
+      await supabase.from('merchant_members').insert({
+        merchant_id: insMerchant.id,
+        user_id: user.id,
+        role: 'owner'
+      });
+
+      await supabase.from('store_settings').insert({
+        merchant_id: insMerchant.id,
+        store_name: data.storeName,
+        is_open: true,
+        currency: data.currency || '₱',
+        delivery_fee: data.deliveryFee ?? 50,
+        phone: data.phone || '',
+        address: data.address || ''
+      });
+    }
+
+    const resolved = await this.resolveUserData(user.id, user.email || '');
     return {
       ...resolved,
       isLoading: false,
@@ -362,6 +447,16 @@ export const authService = {
    * Sign Out flow
    */
   async signOut(): Promise<void> {
+    try {
+      localStorage.removeItem('vendora_orders_cache');
+      localStorage.removeItem('vendora_products_cache');
+      localStorage.removeItem('vendora_categories_cache');
+      localStorage.removeItem('vendora_customers_cache');
+      localStorage.removeItem('vendora_settings_cache');
+    } catch (e) {
+      console.warn('[authService] Failed to clear local cache on signout', e);
+    }
+
     if (this.isConfigured() && supabase) {
       try {
         await supabase.auth.signOut();

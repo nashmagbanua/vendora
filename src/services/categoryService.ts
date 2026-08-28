@@ -30,6 +30,8 @@ export const categoryService = {
    * Fetch categories for merchant
    */
   async getCategories(merchantId: string = DEFAULT_MERCHANT_ID): Promise<Category[]> {
+    if (!merchantId) return [];
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -38,13 +40,17 @@ export const categoryService = {
           .eq('merchant_id', merchantId)
           .order('display_order', { ascending: true });
 
-        if (!error && data && data.length > 0) {
-          const mapped = data.map((c: DbCategory) => mapDbCategoryToCategory(c));
-          setStoredCategories(mapped);
-          return mapped;
+        if (error) {
+          console.warn('[categoryService] Supabase category fetch error:', error.message);
+          return [];
+        }
+
+        if (data) {
+          return data.map((c: DbCategory) => mapDbCategoryToCategory(c));
         }
       } catch (err) {
-        console.warn('Supabase category fetch failed, using local store:', err);
+        console.warn('[categoryService] Supabase category fetch failed:', err);
+        return [];
       }
     }
 

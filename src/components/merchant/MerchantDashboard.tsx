@@ -19,10 +19,10 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({
   const preparingOrders = orders.filter((o) => o.status === 'preparing');
   const todaySales = orders
     .filter((o) => o.status !== 'declined')
-    .reduce((sum, o) => sum + o.total, 4250);
+    .reduce((sum, o) => sum + o.total, 0);
 
-  const newOrdersCount = pendingOrders.length > 0 ? pendingOrders.length : 8;
-  const preparingCount = preparingOrders.length > 0 ? preparingOrders.length : 3;
+  const newOrdersCount = pendingOrders.length;
+  const preparingCount = preparingOrders.length;
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 md:space-y-8 pb-28 text-[#e0e0e2]">
@@ -116,60 +116,70 @@ export const MerchantDashboard: React.FC<MerchantDashboardProps> = ({
           </div>
 
           <div className="divide-y divide-[#1f202e]">
-            {orders.slice(0, 5).map((order) => {
-              const statusPill =
-                order.status === 'pending' ? (
-                  <span className="bg-[#fbbf24]/10 text-[#fbbf24] px-3 py-1 rounded-full text-[12px] font-bold border border-[#fbbf24]/20">
-                    Pending
-                  </span>
-                ) : order.status === 'accepted' ? (
-                  <span className="bg-[#60a5fa]/10 text-[#60a5fa] px-3 py-1 rounded-full text-[12px] font-bold border border-[#60a5fa]/20">
-                    Accepted
-                  </span>
-                ) : order.status === 'preparing' ? (
-                  <span className="bg-[#c084fc]/10 text-[#c084fc] px-3 py-1 rounded-full text-[12px] font-bold border border-[#c084fc]/20">
-                    Preparing
-                  </span>
-                ) : (
-                  <span className="bg-[#34d399]/10 text-[#34d399] px-3 py-1 rounded-full text-[12px] font-bold border border-[#34d399]/20">
-                    Ready
-                  </span>
-                );
+            {orders.length === 0 ? (
+              <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
+                <ShoppingBag className="w-8 h-8 text-[#6b7280]" />
+                <p className="text-[14px] font-semibold text-white">No orders yet</p>
+                <p className="text-[12px] text-[#9496a1] max-w-xs">
+                  When customers place orders on your store, they will appear here in real time.
+                </p>
+              </div>
+            ) : (
+              orders.slice(0, 5).map((order) => {
+                const statusPill =
+                  order.status === 'pending' ? (
+                    <span className="bg-[#fbbf24]/10 text-[#fbbf24] px-3 py-1 rounded-full text-[12px] font-bold border border-[#fbbf24]/20">
+                      Pending
+                    </span>
+                  ) : order.status === 'accepted' ? (
+                    <span className="bg-[#60a5fa]/10 text-[#60a5fa] px-3 py-1 rounded-full text-[12px] font-bold border border-[#60a5fa]/20">
+                      Accepted
+                    </span>
+                  ) : order.status === 'preparing' ? (
+                    <span className="bg-[#c084fc]/10 text-[#c084fc] px-3 py-1 rounded-full text-[12px] font-bold border border-[#c084fc]/20">
+                      Preparing
+                    </span>
+                  ) : (
+                    <span className="bg-[#34d399]/10 text-[#34d399] px-3 py-1 rounded-full text-[12px] font-bold border border-[#34d399]/20">
+                      Ready
+                    </span>
+                  );
 
-              const itemsSummary = order.items.reduce((s, i) => s + i.quantity, 0);
+                const itemsSummary = order.items.reduce((s, i) => s + i.quantity, 0);
 
-              return (
-                <div
-                  key={order.id}
-                  onClick={() => onSelectOrder(order)}
-                  className="p-4 sm:p-5 flex justify-between items-center hover:bg-[#13141f] transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
-                    <div className="w-12 h-12 rounded-2xl bg-[#181926] flex items-center justify-center text-[#818cf8] font-bold text-[14px] shrink-0 border border-[#2e3048]">
-                      {order.orderNumber}
+                return (
+                  <div
+                    key={order.id}
+                    onClick={() => onSelectOrder(order)}
+                    className="p-4 sm:p-5 flex justify-between items-center hover:bg-[#13141f] transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                      <div className="w-12 h-12 rounded-2xl bg-[#181926] flex items-center justify-center text-[#818cf8] font-bold text-[14px] shrink-0 border border-[#2e3048]">
+                        {order.orderNumber}
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[15px] sm:text-[16px] font-bold text-white truncate">
+                          {order.customerName}
+                        </span>
+                        <span className="text-[13px] text-[#9496a1] truncate">
+                          {itemsSummary} items • {settings.currency}{order.total}
+                        </span>
+                        <span className="text-[11px] text-[#6b7280] sm:hidden mt-0.5">
+                          {order.timeAgo || 'Recent'}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[15px] sm:text-[16px] font-bold text-white truncate">
-                        {order.customerName}
-                      </span>
-                      <span className="text-[13px] text-[#9496a1] truncate">
-                        {itemsSummary} items • {settings.currency}{order.total}
-                      </span>
-                      <span className="text-[11px] text-[#6b7280] sm:hidden mt-0.5">
+
+                    <div className="flex flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-4 shrink-0">
+                      <span className="text-[12px] text-[#6b7280] hidden sm:block">
                         {order.timeAgo || 'Recent'}
                       </span>
+                      {statusPill}
                     </div>
                   </div>
-
-                  <div className="flex flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-4 shrink-0">
-                    <span className="text-[12px] text-[#6b7280] hidden sm:block">
-                      {order.timeAgo || 'Recent'}
-                    </span>
-                    {statusPill}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </section>
 

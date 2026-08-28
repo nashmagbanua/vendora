@@ -36,6 +36,8 @@ export const productService = {
    * Fetch all products for a given merchant (including option groups & choices)
    */
   async getProducts(merchantId: string = DEFAULT_MERCHANT_ID): Promise<Product[]> {
+    if (!merchantId) return [];
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data: dbProducts, error: prodErr } = await supabase
@@ -44,7 +46,16 @@ export const productService = {
           .eq('merchant_id', merchantId)
           .order('created_at', { ascending: false });
 
-        if (!prodErr && dbProducts && dbProducts.length > 0) {
+        if (prodErr) {
+          console.warn('[productService] Supabase product fetch error:', prodErr.message);
+          return [];
+        }
+
+        if (dbProducts) {
+          if (dbProducts.length === 0) {
+            return [];
+          }
+
           const productIds = dbProducts.map((p: DbProduct) => p.id);
 
           // Fetch option groups
@@ -67,12 +78,11 @@ export const productService = {
             return mapDbProductToProduct(p, groups, options);
           });
 
-          // Sync cache
-          setStoredProducts(mapped);
           return mapped;
         }
       } catch (err) {
-        console.warn('Supabase product fetch failed, falling back to local store:', err);
+        console.warn('[productService] Supabase product fetch failed:', err);
+        return [];
       }
     }
 
@@ -84,6 +94,8 @@ export const productService = {
    * Fetch a single product by ID
    */
   async getProductById(id: string, merchantId: string = DEFAULT_MERCHANT_ID): Promise<Product | null> {
+    if (!merchantId) return null;
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data: dbProduct, error: prodErr } = await supabase
@@ -91,7 +103,7 @@ export const productService = {
           .select('*')
           .eq('id', id)
           .eq('merchant_id', merchantId)
-          .single();
+          .maybeSingle();
 
         if (!prodErr && dbProduct) {
           const { data: dbGroups } = await supabase
@@ -113,8 +125,9 @@ export const productService = {
           );
         }
       } catch (err) {
-        console.warn('Supabase getProductById failed, falling back to local store:', err);
+        console.warn('[productService] Supabase getProductById failed:', err);
       }
+      return null;
     }
 
     const products = await this.getProducts(merchantId);
