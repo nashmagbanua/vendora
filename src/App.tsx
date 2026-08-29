@@ -481,9 +481,14 @@ export default function App() {
           setMode('merchant');
         }}
         onSignUp={async (signUpData) => {
-          await auth.signUp(signUpData);
+          const result = await auth.signUp(signUpData);
+          if (result?.requiresEmailConfirmation) {
+            // Keep auth modal open so the user sees the confirmation notice
+            return result;
+          }
           setShowAuthModal(false);
           setMode('merchant');
+          return result;
         }}
       />
     </div>

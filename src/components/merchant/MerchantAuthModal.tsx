@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Store, Lock, Mail, User, AlertCircle, ArrowLeft, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Store, Lock, Mail, User, AlertCircle, ArrowLeft, Loader2, Eye, EyeOff, MailCheck } from 'lucide-react';
 import { MerchantSignUpData, MerchantLoginCredentials } from '../../types';
 
 interface MerchantAuthModalProps {
@@ -23,6 +23,7 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
 }) => {
   const [tab, setTab] = useState<'signin' | 'signup'>('signin');
   const [showPassword, setShowPassword] = useState(false);
+  const [emailConfirmationSent, setEmailConfirmationSent] = useState<string | null>(null);
 
   // Sign In Form State
   const [loginEmail, setLoginEmail] = useState('');
@@ -52,16 +53,25 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
   const handleSignUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     onClearError();
+    setEmailConfirmationSent(null);
     try {
-      await onSignUp({
+      const res = await onSignUp({
         fullName: fullName.trim(),
         storeName: storeName.trim(),
         email: signupEmail.trim(),
         password: signupPassword
       });
+      if (res?.requiresEmailConfirmation) {
+        setEmailConfirmationSent(res.confirmationEmail || signupEmail.trim());
+      }
     } catch {
       // Handled in useAuth hook
     }
+  };
+
+  const handleClose = () => {
+    setEmailConfirmationSent(null);
+    onClose();
   };
 
   return (
@@ -70,7 +80,7 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
         {/* Top Gradient Banner & Header */}
         <div className="p-6 sm:p-8 bg-gradient-to-b from-[#13141f] to-[#0a0a0f] border-b border-[#1f202e] relative">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="absolute top-6 left-6 w-9 h-9 rounded-full bg-[#181926] border border-[#27273a] flex items-center justify-center text-[#9496a1] hover:text-white hover:bg-[#202234] transition-all cursor-pointer"
             aria-label="Back to customer view"
           >
@@ -90,203 +100,248 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
           </div>
 
           {/* Mode Switcher Tabs */}
-          <div className="flex bg-[#13141f] p-1 rounded-xl border border-[#1f202e] mt-6">
-            <button
-              type="button"
-              onClick={() => {
-                onClearError();
-                setTab('signin');
-              }}
-              className={`flex-1 py-2 rounded-lg text-[13px] font-bold transition-all cursor-pointer ${
-                tab === 'signin'
-                  ? 'bg-[#4f46e5] text-white shadow-xs'
-                  : 'text-[#9496a1] hover:text-white'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onClearError();
-                setTab('signup');
-              }}
-              className={`flex-1 py-2 rounded-lg text-[13px] font-bold transition-all cursor-pointer ${
-                tab === 'signup'
-                  ? 'bg-[#4f46e5] text-white shadow-xs'
-                  : 'text-[#9496a1] hover:text-white'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
+          {!emailConfirmationSent && (
+            <div className="flex bg-[#13141f] p-1 rounded-xl border border-[#1f202e] mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  onClearError();
+                  setTab('signin');
+                }}
+                className={`flex-1 py-2 rounded-lg text-[13px] font-bold transition-all cursor-pointer ${
+                  tab === 'signin'
+                    ? 'bg-[#4f46e5] text-white shadow-xs'
+                    : 'text-[#9496a1] hover:text-white'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onClearError();
+                  setTab('signup');
+                }}
+                className={`flex-1 py-2 rounded-lg text-[13px] font-bold transition-all cursor-pointer ${
+                  tab === 'signup'
+                    ? 'bg-[#4f46e5] text-white shadow-xs'
+                    : 'text-[#9496a1] hover:text-white'
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Form Body */}
         <div className="p-6 sm:p-8 space-y-5">
-          {/* Error Message */}
-          {error && (
-            <div className="flex items-start gap-3 p-3.5 bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-xl text-[#f87171] text-[13px]">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <span>{error}</span>
+          {/* Email Confirmation Notice Screen */}
+          {emailConfirmationSent ? (
+            <div className="text-center space-y-5 py-2 animate-in fade-in zoom-in-95 duration-200">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#10b981]/10 border border-[#10b981]/20 text-[#10b981] mx-auto shadow-inner">
+                <MailCheck className="w-8 h-8" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-[20px] font-bold text-white tracking-tight">
+                  Check Your Email
+                </h3>
+                <p className="text-[13px] text-[#9496a1] leading-relaxed max-w-sm mx-auto">
+                  Account created successfully! We sent a confirmation link to{' '}
+                  <span className="font-semibold text-white">{emailConfirmationSent}</span>.
+                  Please confirm your email before signing in to set up your store.
+                </p>
+              </div>
+
+              <div className="pt-2 space-y-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginEmail(emailConfirmationSent);
+                    setEmailConfirmationSent(null);
+                    setTab('signin');
+                    onClearError();
+                  }}
+                  className="w-full py-3 bg-[#4f46e5] hover:bg-[#6366f1] text-white font-bold rounded-xl shadow-md text-[14px] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>Proceed to Sign In</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="w-full py-2.5 text-[13px] font-semibold text-[#9496a1] hover:text-white transition-colors cursor-pointer"
+                >
+                  Back to Storefront
+                </button>
               </div>
             </div>
-          )}
-
-          {tab === 'signin' ? (
-            /* Sign In Form */
-            <form onSubmit={handleSignInSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="merchant@yourstore.ph"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    placeholder="••••••••"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-10 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7280] hover:text-[#9496a1]"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-3 bg-[#4f46e5] hover:bg-[#6366f1] text-white font-bold rounded-xl shadow-md text-[14px] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Signing in...</span>
-                  </>
-                ) : (
-                  <span>Sign In as Merchant</span>
-                )}
-              </button>
-            </form>
           ) : (
-            /* Sign Up Form */
-            <form onSubmit={handleSignUpSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
-                  Your Full Name
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Juan Dela Cruz"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
-                  />
+            <>
+              {/* Error Message */}
+              {error && (
+                <div className="flex items-start gap-3 p-3.5 bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-xl text-[#f87171] text-[13px]">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <span>{error}</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div>
-                <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
-                  Store / Restaurant Name
-                </label>
-                <div className="relative">
-                  <Store className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g., Juan's Kitchen Makati"
-                    value={storeName}
-                    onChange={(e) => setStoreName(e.target.value)}
-                    className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
-                  />
-                </div>
-              </div>
+              {tab === 'signin' ? (
+                /* Sign In Form */
+                <form onSubmit={handleSignInSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="email"
+                        required
+                        placeholder="merchant@yourstore.ph"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    required
-                    placeholder="owner@yourstore.ph"
-                    value={signupEmail}
-                    onChange={(e) => setSignupEmail(e.target.value)}
-                    className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
-                  />
-                </div>
-              </div>
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        placeholder="••••••••"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-10 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7280] hover:text-[#9496a1]"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
-                  Password (min 6 characters)
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    minLength={6}
-                    placeholder="••••••••"
-                    value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
-                    className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-10 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
-                  />
                   <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7280] hover:text-[#9496a1]"
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3 bg-[#4f46e5] hover:bg-[#6366f1] text-white font-bold rounded-xl shadow-md text-[14px] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Signing in...</span>
+                      </>
+                    ) : (
+                      <span>Sign In as Merchant</span>
+                    )}
                   </button>
-                </div>
-              </div>
+                </form>
+              ) : (
+                /* Sign Up Form */
+                <form onSubmit={handleSignUpSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
+                      Your Full Name
+                    </label>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Juan Dela Cruz"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
+                      />
+                    </div>
+                  </div>
 
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-3 bg-[#4f46e5] hover:bg-[#6366f1] text-white font-bold rounded-xl shadow-md text-[14px] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Creating Store...</span>
-                  </>
-                ) : (
-                  <span>Create Store & Launch Dashboard</span>
-                )}
-              </button>
-            </form>
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
+                      Store / Restaurant Name
+                    </label>
+                    <div className="relative">
+                      <Store className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g., Juan's Kitchen Makati"
+                        value={storeName}
+                        onChange={(e) => setStoreName(e.target.value)}
+                        className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
+                      Email Address
+                    </label>
+                    <div className="relative">
+                      <Mail className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="email"
+                        required
+                        placeholder="owner@yourstore.ph"
+                        value={signupEmail}
+                        onChange={(e) => setSignupEmail(e.target.value)}
+                        className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
+                      Password (min 6 characters)
+                    </label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        placeholder="••••••••"
+                        value={signupPassword}
+                        onChange={(e) => setSignupPassword(e.target.value)}
+                        className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-10 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7280] hover:text-[#9496a1]"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3 bg-[#4f46e5] hover:bg-[#6366f1] text-white font-bold rounded-xl shadow-md text-[14px] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Creating Account...</span>
+                      </>
+                    ) : (
+                      <span>Create Account & Start</span>
+                    )}
+                  </button>
+                </form>
+              )}
+            </>
           )}
         </div>
       </div>

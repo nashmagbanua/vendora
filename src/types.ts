@@ -54,6 +54,8 @@ export interface AuthState {
   isLoading: boolean;
   isDemoMode?: boolean;
   error: string | null;
+  requiresEmailConfirmation?: boolean;
+  confirmationEmail?: string;
 }
 
 export interface Merchant {

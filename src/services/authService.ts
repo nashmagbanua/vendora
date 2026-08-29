@@ -299,52 +299,41 @@ export const authService = {
       throw new Error('Sign up failed: User account could not be created.');
     }
 
-    // 2. Call RPC to atomically create Merchant, Membership & Settings
-    try {
-      const { data: rpcResult, error: rpcError } = await supabase.rpc('create_merchant_with_owner', {
-        p_name: data.storeName,
-        p_slug: data.storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + createdUser.id.substring(0, 6),
-        p_description: `Welcome to ${data.storeName}! Enjoy our best offerings.`,
-        p_currency: '₱',
-        p_delivery_fee: 50,
-        p_phone: data.phone || '+63 900 000 0000',
-        p_address: data.address || 'Metro Manila, Philippines'
-      });
-
-      if (rpcError) {
-        console.warn('[authService] RPC onboarding error, attempting fallback insertion:', rpcError.message);
-        // Fallback: Direct table inserts in case migration 002 RPC isn't loaded in DB yet
-        const { data: insMerchant, error: mErr } = await supabase
-          .from('merchants')
-          .insert({
-            name: data.storeName,
-            slug: data.storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + createdUser.id.substring(0, 6),
-            owner_id: createdUser.id
-          })
-          .select()
-          .single();
-
-        if (!mErr && insMerchant) {
-          await supabase.from('merchant_members').insert({
-            merchant_id: insMerchant.id,
-            user_id: createdUser.id,
-            role: 'owner'
-          });
-
-          await supabase.from('store_settings').insert({
-            merchant_id: insMerchant.id,
-            store_name: data.storeName,
-            is_open: true,
-            currency: '₱',
-            delivery_fee: 50
-          });
-        }
-      }
-    } catch (e) {
-      console.warn('[authService] Error executing merchant creation onboarding:', e);
+    // 2. Check if a valid session was issued or if email confirmation is required
+    if (!authData.session) {
+      // Email confirmation is required. Do NOT call RPC or attempt database inserts without an active session.
+      return {
+        user: null,
+        profile: null,
+        merchant: null,
+        role: null,
+        memberships: [],
+        isAuthenticated: false,
+        isLoading: false,
+        isDemoMode: false,
+        error: null,
+        requiresEmailConfirmation: true,
+        confirmationEmail: data.email
+      };
     }
 
-    // 3. Resolve and return active state
+    // 3. If an active session exists (email confirmation disabled), atomically create Merchant, Membership & Settings
+    const { error: rpcError } = await supabase.rpc('create_merchant_with_owner', {
+      p_name: data.storeName,
+      p_slug: data.storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + createdUser.id.substring(0, 6),
+      p_description: `Welcome to ${data.storeName}! Enjoy our best offerings.`,
+      p_currency: '₱',
+      p_delivery_fee: 50,
+      p_phone: data.phone || '+63 900 000 0000',
+      p_address: data.address || 'Metro Manila, Philippines'
+    });
+
+    if (rpcError) {
+      console.error('[authService] RPC create_merchant_with_owner error:', rpcError.message);
+      throw new Error(`Store creation failed: ${rpcError.message}`);
+    }
+
+    // 4. Resolve and return active state
     const resolved = await this.resolveUserData(createdUser.id, createdUser.email || data.email);
     return {
       ...resolved,
@@ -483,36 +472,8 @@ export const authService = {
     });
 
     if (rpcError) {
-      console.warn('[authService] RPC create_merchant_with_owner failed, trying direct insert:', rpcError.message);
-      const { data: insMerchant, error: mErr } = await supabase
-        .from('merchants')
-        .insert({
-          name: data.storeName,
-          slug,
-          owner_id: user.id
-        })
-        .select()
-        .single();
-
-      if (mErr || !insMerchant) {
-        throw new Error(rpcError?.message || mErr?.message || 'Failed to create merchant.');
-      }
-
-      await supabase.from('merchant_members').insert({
-        merchant_id: insMerchant.id,
-        user_id: user.id,
-        role: 'owner'
-      });
-
-      await supabase.from('store_settings').insert({
-        merchant_id: insMerchant.id,
-        store_name: data.storeName,
-        is_open: true,
-        currency: data.currency || '₱',
-        delivery_fee: data.deliveryFee ?? 50,
-        phone: data.phone || '',
-        address: data.address || ''
-      });
+      console.error('[authService] RPC create_merchant_with_owner failed:', rpcError.message);
+      throw new Error(rpcError.message || 'Failed to create store.');
     }
 
     const resolved = await this.resolveUserData(user.id, user.email || '');
