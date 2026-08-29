@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Category, Customer } from '../types';
 import { categoryService } from '../services/categoryService';
 import { customerService } from '../services/customerService';
-import { DEFAULT_MERCHANT_ID } from '../data/initialData';
 
-export function useMerchant(activeMerchantId: string = DEFAULT_MERCHANT_ID) {
+export function useMerchant(activeMerchantId: string = '') {
   const [merchantId, setMerchantId] = useState<string>(activeMerchantId);
   const [categories, setCategories] = useState<Category[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -14,12 +13,15 @@ export function useMerchant(activeMerchantId: string = DEFAULT_MERCHANT_ID) {
 
   // Sync internal merchantId if prop changes
   useEffect(() => {
-    if (activeMerchantId && activeMerchantId !== merchantId) {
-      setMerchantId(activeMerchantId);
-    }
+    setMerchantId(activeMerchantId);
   }, [activeMerchantId]);
 
   const refreshCategories = useCallback(async () => {
+    if (!merchantId) {
+      setCategories([]);
+      setLoadingCategories(false);
+      return;
+    }
     try {
       setLoadingCategories(true);
       setError(null);
@@ -33,6 +35,11 @@ export function useMerchant(activeMerchantId: string = DEFAULT_MERCHANT_ID) {
   }, [merchantId]);
 
   const refreshCustomers = useCallback(async () => {
+    if (!merchantId) {
+      setCustomers([]);
+      setLoadingCustomers(false);
+      return;
+    }
     try {
       setLoadingCustomers(true);
       setError(null);
@@ -53,6 +60,9 @@ export function useMerchant(activeMerchantId: string = DEFAULT_MERCHANT_ID) {
   const addCategory = async (
     categoryData: Omit<Category, 'id'> & { id?: string }
   ): Promise<Category> => {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to add category.');
+    }
     try {
       setError(null);
       const newCat = await categoryService.createCategory(categoryData, merchantId);
@@ -65,6 +75,9 @@ export function useMerchant(activeMerchantId: string = DEFAULT_MERCHANT_ID) {
   };
 
   const updateCategory = async (category: Category): Promise<Category> => {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to update category.');
+    }
     try {
       setError(null);
       const updated = await categoryService.updateCategory(category.id, category, merchantId);
@@ -79,6 +92,9 @@ export function useMerchant(activeMerchantId: string = DEFAULT_MERCHANT_ID) {
   };
 
   const deleteCategory = async (categoryId: string): Promise<boolean> => {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to delete category.');
+    }
     try {
       setError(null);
       await categoryService.deleteCategory(categoryId, merchantId);

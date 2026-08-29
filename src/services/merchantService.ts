@@ -1,5 +1,4 @@
 import { StoreSettings, Merchant } from '../types';
-import { INITIAL_SETTINGS, INITIAL_MERCHANT, DEFAULT_MERCHANT_ID } from '../data/initialData';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import {
   DbMerchant,
@@ -11,6 +10,19 @@ import {
 
 const SETTINGS_STORAGE_KEY = 'vendora_settings_cache';
 
+const DEFAULT_EMPTY_SETTINGS: StoreSettings = {
+  merchantId: '',
+  storeName: 'Store',
+  storeDescription: '',
+  isOpen: true,
+  currency: '₱',
+  deliveryFee: 50,
+  phone: '',
+  address: '',
+  trialDaysLeft: 14,
+  plan: 'Growth Plan'
+};
+
 function getStoredSettings(): StoreSettings {
   try {
     const data = localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -20,7 +32,7 @@ function getStoredSettings(): StoreSettings {
   } catch (e) {
     console.error('Failed to read settings from localStorage', e);
   }
-  return INITIAL_SETTINGS;
+  return DEFAULT_EMPTY_SETTINGS;
 }
 
 function setStoredSettings(settings: StoreSettings): void {
@@ -35,7 +47,7 @@ export const merchantService = {
   /**
    * Fetch merchant profile by ID
    */
-  async getMerchant(merchantId: string = DEFAULT_MERCHANT_ID): Promise<Merchant | null> {
+  async getMerchant(merchantId: string = ''): Promise<Merchant | null> {
     if (!merchantId) return null;
 
     if (isSupabaseConfigured && supabase) {
@@ -54,25 +66,66 @@ export const merchantService = {
       }
       return null;
     }
-    return INITIAL_MERCHANT.id === merchantId ? INITIAL_MERCHANT : null;
+    return null;
+  },
+
+  /**
+   * Fetch merchant by slug for deterministic storefront routing
+   */
+  async getMerchantBySlug(slug: string): Promise<Merchant | null> {
+    if (!slug) return null;
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('merchants')
+          .select('*')
+          .eq('slug', slug)
+          .maybeSingle();
+
+        if (!error && data) {
+          return mapDbMerchantToMerchant(data as DbMerchant);
+        }
+      } catch (err) {
+        console.warn('[merchantService] Supabase getMerchantBySlug failed:', err);
+      }
+      return null;
+    }
+    return null;
+  },
+
+  /**
+   * Fetch the first active merchant from database for default storefront exploration
+   */
+  async getFirstActiveMerchant(): Promise<Merchant | null> {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('merchants')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!error && data) {
+          return mapDbMerchantToMerchant(data as DbMerchant);
+        }
+      } catch (err) {
+        console.warn('[merchantService] Supabase getFirstActiveMerchant failed:', err);
+      }
+      return null;
+    }
+    return null;
   },
 
   /**
    * Fetch store configuration and operational settings
    */
-  async getStoreSettings(merchantId: string = DEFAULT_MERCHANT_ID): Promise<StoreSettings> {
+  async getStoreSettings(merchantId: string = ''): Promise<StoreSettings> {
     if (!merchantId) {
       return {
-        merchantId: '',
-        storeName: 'My Store',
-        storeDescription: '',
-        isOpen: true,
-        currency: '₱',
-        deliveryFee: 50,
-        phone: '',
-        address: '',
-        trialDaysLeft: 14,
-        plan: 'Growth Plan'
+        ...DEFAULT_EMPTY_SETTINGS,
+        merchantId: ''
       };
     }
 
@@ -93,16 +146,8 @@ export const merchantService = {
         console.warn('[merchantService] Supabase getStoreSettings failed:', err);
       }
       return {
-        merchantId,
-        storeName: 'My Store',
-        storeDescription: '',
-        isOpen: true,
-        currency: '₱',
-        deliveryFee: 50,
-        phone: '',
-        address: '',
-        trialDaysLeft: 14,
-        plan: 'Growth Plan'
+        ...DEFAULT_EMPTY_SETTINGS,
+        merchantId
       };
     }
 
@@ -111,16 +156,8 @@ export const merchantService = {
       return stored;
     }
     return {
-      merchantId,
-      storeName: 'My Store',
-      storeDescription: '',
-      isOpen: true,
-      currency: '₱',
-      deliveryFee: 50,
-      phone: '',
-      address: '',
-      trialDaysLeft: 14,
-      plan: 'Growth Plan'
+      ...DEFAULT_EMPTY_SETTINGS,
+      merchantId
     };
   },
 
@@ -129,8 +166,12 @@ export const merchantService = {
    */
   async updateStoreSettings(
     updates: Partial<StoreSettings>,
-    merchantId: string = DEFAULT_MERCHANT_ID
+    merchantId: string = ''
   ): Promise<StoreSettings> {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to update store settings.');
+    }
+
     const current = getStoredSettings();
     const updated: StoreSettings = {
       ...current,
@@ -164,8 +205,11 @@ export const merchantService = {
   /**
    * Toggle store open / closed status
    */
-  async toggleStoreStatus(merchantId: string = DEFAULT_MERCHANT_ID): Promise<StoreSettings> {
-    const current = getStoredSettings();
+  async toggleStoreStatus(merchantId: string = ''): Promise<StoreSettings> {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to toggle store status.');
+    }
+    const current = await this.getStoreSettings(merchantId);
     return this.updateStoreSettings({ isOpen: !current.isOpen }, merchantId);
   }
 };

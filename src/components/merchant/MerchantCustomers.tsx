@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { Order, StoreSettings, Customer } from '../../types';
-import { INITIAL_CUSTOMERS } from '../../data/initialData';
 import { customerService } from '../../services/customerService';
 import { Search, Phone, MapPin, Heart, MessageCircle } from 'lucide-react';
 
@@ -13,7 +12,7 @@ interface MerchantCustomersProps {
 export const MerchantCustomers: React.FC<MerchantCustomersProps> = ({
   orders,
   settings,
-  customers = INITIAL_CUSTOMERS
+  customers = []
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 

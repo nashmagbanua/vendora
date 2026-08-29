@@ -1,5 +1,4 @@
 import { Order, OrderStatus, PaymentStatus } from '../types';
-import { INITIAL_ORDERS, DEFAULT_MERCHANT_ID } from '../data/initialData';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import {
   DbOrder,
@@ -53,7 +52,7 @@ function getStoredOrders(): Order[] {
   } catch (e) {
     console.error('Failed to read orders from localStorage', e);
   }
-  return INITIAL_ORDERS;
+  return [];
 }
 
 function setStoredOrders(orders: Order[]): void {
@@ -68,7 +67,7 @@ export const orderService = {
   /**
    * Fetch all orders for a merchant including historical item snapshots
    */
-  async getOrders(merchantId: string = DEFAULT_MERCHANT_ID): Promise<Order[]> {
+  async getOrders(merchantId: string = ''): Promise<Order[]> {
     if (!merchantId) return [];
 
     if (isSupabaseConfigured && supabase) {
@@ -118,7 +117,9 @@ export const orderService = {
   /**
    * Fetch order by ID or Tracking Token including item snapshots
    */
-  async getOrderById(id: string, merchantId: string = DEFAULT_MERCHANT_ID, trackingToken?: string): Promise<Order | null> {
+  async getOrderById(id: string, merchantId: string = '', trackingToken?: string): Promise<Order | null> {
+    if (!id) return null;
+
     if (isSupabaseConfigured && supabase) {
       try {
         // If tracking token is provided, attempt secure RPC lookup
@@ -132,11 +133,16 @@ export const orderService = {
           }
         }
 
-        const { data: dbOrder, error: orderErr } = await supabase
+        const query = supabase
           .from('orders')
           .select('*')
-          .eq('id', id)
-          .maybeSingle();
+          .eq('id', id);
+
+        if (merchantId) {
+          query.eq('merchant_id', merchantId);
+        }
+
+        const { data: dbOrder, error: orderErr } = await query.maybeSingle();
 
         if (!orderErr && dbOrder) {
           const { data: dbItems } = await supabase
@@ -159,9 +165,9 @@ export const orderService = {
   /**
    * Fetch recent orders placed by guest customer using stored tracking tokens
    */
-  async getGuestOrders(merchantId: string = DEFAULT_MERCHANT_ID): Promise<Order[]> {
+  async getGuestOrders(merchantId: string = ''): Promise<Order[]> {
     const tokens = getStoredGuestTokens();
-    const guestTokens = tokens.filter((t) => !t.merchantId || t.merchantId === merchantId);
+    const guestTokens = tokens.filter((t) => !t.merchantId || !merchantId || t.merchantId === merchantId);
     
     if (guestTokens.length === 0) {
       if (isSupabaseConfigured && supabase) {
@@ -193,11 +199,16 @@ export const orderService = {
 
   /**
    * Create a new customer order with server-side pricing validation and immutable snapshots
+   * In Supabase mode, STRICTLY uses create_secure_order RPC and never falls back to direct client inserts
    */
   async createOrder(
     orderData: Omit<Order, 'id' | 'createdAt'> & { id?: string; createdAt?: string; trackingToken?: string },
-    merchantId: string = DEFAULT_MERCHANT_ID
+    merchantId: string = ''
   ): Promise<Order> {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to create an order.');
+    }
+
     const generatedId = orderData.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `order-${Date.now()}`);
     const fallbackToken = orderData.trackingToken || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : `token-${Date.now()}`);
     
@@ -212,77 +223,45 @@ export const orderService = {
     };
 
     if (isSupabaseConfigured && supabase) {
-      try {
-        // Transform selectedOptions into exact JSONB structure expected by create_secure_order
-        const itemsPayload = (newOrder.items || []).map((item) => ({
-          product_id: item.productId,
-          quantity: Math.max(1, Math.min(item.quantity || 1, 99)),
-          options_description: item.optionsDescription || 'Standard',
-          selected_options: item.selectedOptions || {}
-        }));
+      // Transform selectedOptions into exact JSONB structure expected by create_secure_order
+      const itemsPayload = (newOrder.items || []).map((item) => ({
+        product_id: item.productId,
+        quantity: Math.max(1, Math.min(item.quantity || 1, 99)),
+        options_description: item.optionsDescription || 'Standard',
+        selected_options: item.selectedOptions || {}
+      }));
 
-        // Attempt creation via the atomic, server-validated RPC
-        const { data: createdOrderRpc, error: rpcErr } = await supabase.rpc('create_secure_order', {
-          p_merchant_id: merchantId,
-          p_customer_name: newOrder.customerName,
-          p_phone: newOrder.phone,
-          p_email: newOrder.email || null,
-          p_fulfillment: newOrder.fulfillment,
-          p_address: newOrder.address,
-          p_payment_method: newOrder.paymentMethod,
-          p_notes: newOrder.notes || null,
-          p_items: itemsPayload,
-          p_order_number: newOrder.orderNumber || null
-        });
-
-        if (!rpcErr && createdOrderRpc) {
-          const verifiedOrder = createdOrderRpc as Order;
-          if (verifiedOrder.trackingToken) {
-            saveGuestToken(verifiedOrder.id, verifiedOrder.trackingToken, merchantId);
-          }
-          const all = getStoredOrders();
-          setStoredOrders([verifiedOrder, ...all.filter((o) => o.id !== verifiedOrder.id)]);
-          return verifiedOrder;
-        }
-
-        if (rpcErr) {
-          console.warn('create_secure_order RPC returned error:', rpcErr);
-        }
-
-        // Direct table fallback if RPC is not yet applied
-        const dbPayload = mapOrderToDb(newOrder, merchantId);
-        const { data: insertedOrder, error: insertErr } = await supabase
-          .from('orders')
-          .insert(dbPayload)
-          .select()
-          .single();
-
-        if (!insertErr && insertedOrder) {
-          const orderId = insertedOrder.id;
-
-          // Insert order items snapshots
-          if (newOrder.items && newOrder.items.length > 0) {
-            const itemsRows = newOrder.items.map((item) =>
-              mapOrderItemToDb(item, orderId, merchantId)
-            );
-            await supabase.from('order_items').insert(itemsRows);
-          }
-
-          const fullOrder = await this.getOrderById(orderId, merchantId, fallbackToken);
-          if (fullOrder) {
-            if (fullOrder.trackingToken) {
-              saveGuestToken(fullOrder.id, fullOrder.trackingToken, merchantId);
-            }
-            const all = getStoredOrders();
-            setStoredOrders([fullOrder, ...all.filter((o) => o.id !== fullOrder.id)]);
-            return fullOrder;
-          }
-        }
-      } catch (err) {
-        console.warn('Supabase createOrder failed, saving to local store:', err);
+      if (itemsPayload.length === 0) {
+        throw new Error('Order must contain at least one item.');
       }
+
+      // Creation via the atomic, server-validated RPC
+      const { data: createdOrderRpc, error: rpcErr } = await supabase.rpc('create_secure_order', {
+        p_merchant_id: merchantId,
+        p_customer_name: newOrder.customerName,
+        p_phone: newOrder.phone,
+        p_email: newOrder.email || null,
+        p_fulfillment: newOrder.fulfillment,
+        p_address: newOrder.address,
+        p_payment_method: newOrder.paymentMethod,
+        p_notes: newOrder.notes || null,
+        p_items: itemsPayload,
+        p_order_number: newOrder.orderNumber || null
+      });
+
+      if (rpcErr || !createdOrderRpc) {
+        console.error('[orderService] create_secure_order RPC failed:', rpcErr);
+        throw new Error(rpcErr?.message || 'Failed to create order securely. Please try again.');
+      }
+
+      const verifiedOrder = createdOrderRpc as Order;
+      if (verifiedOrder.trackingToken) {
+        saveGuestToken(verifiedOrder.id, verifiedOrder.trackingToken, merchantId);
+      }
+      return verifiedOrder;
     }
 
+    // Local development storage when Supabase is not configured
     saveGuestToken(newOrder.id, fallbackToken, merchantId);
     const all = getStoredOrders();
     const updated = [newOrder, ...all.filter((o) => o.id !== newOrder.id)];
@@ -296,17 +275,30 @@ export const orderService = {
   async updateOrderStatus(
     orderId: string,
     status: OrderStatus,
-    merchantId: string = DEFAULT_MERCHANT_ID
+    merchantId: string = ''
   ): Promise<Order> {
+    if (!orderId) {
+      throw new Error('Order ID is required.');
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase
+        const query = supabase
           .from('orders')
           .update({ status })
-          .eq('id', orderId)
-          .eq('merchant_id', merchantId);
-      } catch (err) {
+          .eq('id', orderId);
+
+        if (merchantId) {
+          query.eq('merchant_id', merchantId);
+        }
+
+        const { error } = await query;
+        if (error) {
+          throw new Error(error.message);
+        }
+      } catch (err: any) {
         console.warn('Supabase updateOrderStatus failed:', err);
+        throw err;
       }
     }
 
@@ -339,17 +331,30 @@ export const orderService = {
   async updatePaymentStatus(
     orderId: string,
     paymentStatus: PaymentStatus,
-    merchantId: string = DEFAULT_MERCHANT_ID
+    merchantId: string = ''
   ): Promise<Order> {
+    if (!orderId) {
+      throw new Error('Order ID is required.');
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase
+        const query = supabase
           .from('orders')
           .update({ payment_status: paymentStatus })
-          .eq('id', orderId)
-          .eq('merchant_id', merchantId);
-      } catch (err) {
+          .eq('id', orderId);
+
+        if (merchantId) {
+          query.eq('merchant_id', merchantId);
+        }
+
+        const { error } = await query;
+        if (error) {
+          throw new Error(error.message);
+        }
+      } catch (err: any) {
         console.warn('Supabase updatePaymentStatus failed:', err);
+        throw err;
       }
     }
 
@@ -381,7 +386,7 @@ export const orderService = {
    */
   async advanceOrderStatus(
     orderId: string,
-    merchantId: string = DEFAULT_MERCHANT_ID
+    merchantId: string = ''
   ): Promise<Order> {
     const order = await this.getOrderById(orderId, merchantId);
     if (!order) {

@@ -32,12 +32,25 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
   const handlePlaceOrder = () => {
     setValidationError(null);
+    if (!settings.merchantId) {
+      setValidationError('Store configuration error: Store identity is not configured. Orders cannot be processed.');
+      return;
+    }
     if (!fullName.trim() || !phoneNumber.trim()) {
       setValidationError('Please provide your name and phone number to place the order.');
       return;
     }
     if (fulfillment === 'delivery' && !address.trim()) {
       setValidationError('Please enter a delivery address for order dispatch.');
+      return;
+    }
+
+    // Verify all cart items belong to the active storefront
+    const hasCrossMerchantItems = cart.some(
+      (item) => item.product.merchantId && item.product.merchantId !== settings.merchantId
+    );
+    if (hasCrossMerchantItems) {
+      setValidationError('Some items in your cart belong to a different store. Please review your cart before checking out.');
       return;
     }
 
@@ -48,14 +61,14 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
     const newOrder: Order = {
       id: `order-${Date.now()}`,
-      merchantId: settings.merchantId || '8829',
+      merchantId: settings.merchantId,
       orderNumber: orderNum,
       customerName: fullName.trim(),
       phone: phoneNumber.trim(),
       fulfillment,
       address: fulfillment === 'delivery' ? address.trim() : `Store Pickup (${settings.address})`,
       paymentMethod,
-      paymentStatus: paymentMethod === 'cod' ? 'pending' : 'paid',
+      paymentStatus: 'pending',
       notes: orderNotes.trim(),
       items: cart.map((item) => {
         const optionSummaries: string[] = [];

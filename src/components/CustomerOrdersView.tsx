@@ -38,7 +38,7 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-[24px] sm:text-[28px] font-bold text-white">Your Orders</h1>
-          <p className="text-[14px] text-[#9496a1]">Track your ongoing and past orders from Juan's Kitchen</p>
+          <p className="text-[14px] text-[#9496a1]">Track your ongoing and past orders</p>
         </div>
         <span className="bg-[#1e1e38] text-[#818cf8] border border-[#2e3048] text-[13px] font-bold px-3.5 py-1 rounded-full">
           {orders.length} Total
@@ -51,7 +51,7 @@ export const CustomerOrdersView: React.FC<CustomerOrdersViewProps> = ({
             <Receipt className="w-8 h-8" />
           </div>
           <h3 className="text-[18px] font-bold text-white mb-1">No Orders Yet</h3>
-          <p className="text-[14px] text-[#9496a1] mb-6">You haven't placed any orders yet. Check out our signature adobo and popular items!</p>
+          <p className="text-[14px] text-[#9496a1] mb-6">You haven't placed any orders yet. Browse the catalog to get started!</p>
           <button
             onClick={onExploreMenu}
             className="w-full py-3 bg-[#4f46e5] text-white rounded-xl text-[14px] font-bold hover:bg-[#6366f1] shadow-[0_4px_16px_rgba(79,70,229,0.4)] transition-all flex items-center justify-center gap-2 cursor-pointer"

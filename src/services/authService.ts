@@ -156,7 +156,7 @@ export const authService = {
         console.warn('[authService] Error fetching merchant memberships:', memErr.message);
       }
 
-      const memberships: MerchantMember[] = (dbMemberships || []).map((m: any) => ({
+      let memberships: MerchantMember[] = (dbMemberships || []).map((m: any) => ({
         id: m.id,
         merchantId: m.merchant_id,
         userId: m.user_id,
@@ -164,7 +164,39 @@ export const authService = {
         joinedAt: m.joined_at
       }));
 
-      // 3. If member of at least one merchant, fetch the primary merchant
+      // 3. Fallback check: if memberships is empty, check if user is direct owner of any merchant in merchants table
+      if (memberships.length === 0) {
+        const { data: ownedMerchants, error: ownErr } = await supabase
+          .from('merchants')
+          .select('*')
+          .eq('owner_id', userId)
+          .order('created_at', { ascending: false });
+
+        if (!ownErr && ownedMerchants && ownedMerchants.length > 0) {
+          for (const om of ownedMerchants) {
+            memberships.push({
+              id: `mem-owner-${om.id}`,
+              merchantId: om.id,
+              userId: userId,
+              role: 'owner',
+              joinedAt: om.created_at
+            });
+
+            // Self-heal the missing merchant_members entry in the background
+            try {
+              await supabase.from('merchant_members').insert({
+                merchant_id: om.id,
+                user_id: userId,
+                role: 'owner'
+              });
+            } catch (healErr) {
+              // Ignore if already existing
+            }
+          }
+        }
+      }
+
+      // 4. If member of at least one merchant, fetch the primary merchant
       let merchant: Merchant | null = null;
       let role: 'owner' | 'admin' | 'staff' | null = null;
 

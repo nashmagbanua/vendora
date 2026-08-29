@@ -1,5 +1,4 @@
 import { Product } from '../types';
-import { INITIAL_PRODUCTS, DEFAULT_MERCHANT_ID } from '../data/initialData';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import {
   DbProduct,
@@ -20,7 +19,7 @@ function getStoredProducts(): Product[] {
   } catch (e) {
     console.error('Failed to read products from localStorage', e);
   }
-  return INITIAL_PRODUCTS;
+  return [];
 }
 
 function setStoredProducts(products: Product[]): void {
@@ -35,7 +34,7 @@ export const productService = {
   /**
    * Fetch all products for a given merchant (including option groups & choices)
    */
-  async getProducts(merchantId: string = DEFAULT_MERCHANT_ID): Promise<Product[]> {
+  async getProducts(merchantId: string = ''): Promise<Product[]> {
     if (!merchantId) return [];
 
     if (isSupabaseConfigured && supabase) {
@@ -93,8 +92,8 @@ export const productService = {
   /**
    * Fetch a single product by ID
    */
-  async getProductById(id: string, merchantId: string = DEFAULT_MERCHANT_ID): Promise<Product | null> {
-    if (!merchantId) return null;
+  async getProductById(id: string, merchantId: string = ''): Promise<Product | null> {
+    if (!id || !merchantId) return null;
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -139,8 +138,11 @@ export const productService = {
    */
   async createProduct(
     productData: Omit<Product, 'id'> & { id?: string },
-    merchantId: string = DEFAULT_MERCHANT_ID
+    merchantId: string = ''
   ): Promise<Product> {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to create a product.');
+    }
     const generatedId = productData.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `prod-${Date.now()}`);
     const newProduct: Product = {
       ...productData,
@@ -219,8 +221,11 @@ export const productService = {
   async updateProduct(
     id: string,
     updates: Partial<Product>,
-    merchantId: string = DEFAULT_MERCHANT_ID
+    merchantId: string = ''
   ): Promise<Product> {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to update a product.');
+    }
     if (isSupabaseConfigured && supabase) {
       try {
         const dbPayload = mapProductToDb(updates, merchantId);
@@ -303,7 +308,10 @@ export const productService = {
   /**
    * Toggle active/inactive status of product
    */
-  async toggleProductActive(id: string, merchantId: string = DEFAULT_MERCHANT_ID): Promise<Product> {
+  async toggleProductActive(id: string, merchantId: string = ''): Promise<Product> {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to toggle product status.');
+    }
     const all = getStoredProducts();
     const existing = all.find((p) => p.id === id);
     const nextStatus = existing ? !existing.isActive : true;
@@ -326,7 +334,10 @@ export const productService = {
   /**
    * Delete a product
    */
-  async deleteProduct(id: string, merchantId: string = DEFAULT_MERCHANT_ID): Promise<boolean> {
+  async deleteProduct(id: string, merchantId: string = ''): Promise<boolean> {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to delete a product.');
+    }
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase

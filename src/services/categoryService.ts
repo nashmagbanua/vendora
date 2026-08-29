@@ -1,5 +1,4 @@
 import { Category } from '../types';
-import { INITIAL_CATEGORIES, DEFAULT_MERCHANT_ID } from '../data/initialData';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { DbCategory, mapDbCategoryToCategory, mapCategoryToDb } from '../lib/dbMappers';
 
@@ -14,7 +13,7 @@ function getStoredCategories(): Category[] {
   } catch (e) {
     console.error('Failed to read categories from localStorage', e);
   }
-  return INITIAL_CATEGORIES;
+  return [];
 }
 
 function setStoredCategories(categories: Category[]): void {
@@ -29,7 +28,7 @@ export const categoryService = {
   /**
    * Fetch categories for merchant
    */
-  async getCategories(merchantId: string = DEFAULT_MERCHANT_ID): Promise<Category[]> {
+  async getCategories(merchantId: string = ''): Promise<Category[]> {
     if (!merchantId) return [];
 
     if (isSupabaseConfigured && supabase) {
@@ -63,8 +62,11 @@ export const categoryService = {
    */
   async createCategory(
     categoryData: Omit<Category, 'id'> & { id?: string },
-    merchantId: string = DEFAULT_MERCHANT_ID
+    merchantId: string = ''
   ): Promise<Category> {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to create a category.');
+    }
     const generatedId = categoryData.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `cat-${Date.now()}`);
     const newCategory: Category = {
       ...categoryData,
@@ -104,8 +106,11 @@ export const categoryService = {
   async updateCategory(
     id: string,
     updates: Partial<Category>,
-    merchantId: string = DEFAULT_MERCHANT_ID
+    merchantId: string = ''
   ): Promise<Category> {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to update a category.');
+    }
     if (isSupabaseConfigured && supabase) {
       try {
         const dbPayload = mapCategoryToDb(updates, merchantId);
@@ -150,7 +155,10 @@ export const categoryService = {
   /**
    * Delete category
    */
-  async deleteCategory(id: string, merchantId: string = DEFAULT_MERCHANT_ID): Promise<boolean> {
+  async deleteCategory(id: string, merchantId: string = ''): Promise<boolean> {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to delete a category.');
+    }
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase

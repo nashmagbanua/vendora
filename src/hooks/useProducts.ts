@@ -1,14 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Product } from '../types';
 import { productService } from '../services/productService';
-import { DEFAULT_MERCHANT_ID } from '../data/initialData';
 
-export function useProducts(merchantId: string = DEFAULT_MERCHANT_ID) {
+export function useProducts(merchantId: string = '') {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refreshProducts = useCallback(async () => {
+    if (!merchantId) {
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);

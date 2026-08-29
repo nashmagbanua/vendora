@@ -1,10 +1,22 @@
 import { useState, useEffect, useCallback } from 'react';
 import { StoreSettings } from '../types';
 import { merchantService } from '../services/merchantService';
-import { INITIAL_SETTINGS, DEFAULT_MERCHANT_ID } from '../data/initialData';
 
-export function useStoreSettings(merchantId: string = DEFAULT_MERCHANT_ID) {
-  const [settings, setSettings] = useState<StoreSettings>(INITIAL_SETTINGS);
+const DEFAULT_INITIAL_SETTINGS: StoreSettings = {
+  merchantId: '',
+  storeName: 'Store',
+  storeDescription: '',
+  isOpen: true,
+  currency: '₱',
+  deliveryFee: 50,
+  phone: '',
+  address: '',
+  trialDaysLeft: 14,
+  plan: 'Growth Plan'
+};
+
+export function useStoreSettings(merchantId: string = '') {
+  const [settings, setSettings] = useState<StoreSettings>(DEFAULT_INITIAL_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

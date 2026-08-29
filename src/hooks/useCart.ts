@@ -1,52 +1,52 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { CartItem, Product } from '../types';
-import { INITIAL_PRODUCTS } from '../data/initialData';
 
-const CART_STORAGE_KEY = 'vendora_cart_items';
+function getCartStorageKey(merchantId: string): string {
+  return merchantId ? `vendora_cart_${merchantId}` : '';
+}
 
-const DEFAULT_INITIAL_CART: CartItem[] = [
-  {
-    cartItemId: 'initial-1',
-    product: INITIAL_PRODUCTS[0], // Chicken Adobo
-    quantity: 1,
-    selectedOptions: {
-      rice: 'rice-white',
-      spice: 'spice-spicy'
-    },
-    totalPrice: 270
-  },
-  {
-    cartItemId: 'initial-2',
-    product: INITIAL_PRODUCTS[4], // Floral Summer Dress
-    quantity: 1,
-    selectedOptions: {
-      size: 'sz-m',
-      color: 'col-red'
-    },
-    totalPrice: 599
-  }
-];
-
-export function useCart() {
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    try {
-      const stored = localStorage.getItem(CART_STORAGE_KEY);
-      if (stored) {
-        return JSON.parse(stored);
+function loadCartFromStorage(merchantId: string): CartItem[] {
+  if (!merchantId) return [];
+  try {
+    const key = getCartStorageKey(merchantId);
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      const parsed: CartItem[] = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        // Filter out any corrupt items or items belonging to a different merchant
+        return parsed.filter(
+          (item) => !item.product.merchantId || item.product.merchantId === merchantId
+        );
       }
-    } catch (e) {
-      console.warn('Failed to load cart from storage, using defaults:', e);
     }
-    return DEFAULT_INITIAL_CART;
-  });
+  } catch (e) {
+    console.warn('Failed to load cart from storage:', e);
+  }
+  return [];
+}
 
+export function useCart(merchantId: string = '') {
+  const [cart, setCart] = useState<CartItem[]>(() => loadCartFromStorage(merchantId));
+
+  // Reload or switch cart when merchantId changes
   useEffect(() => {
+    setCart(loadCartFromStorage(merchantId));
+  }, [merchantId]);
+
+  // Persist cart updates to merchant-scoped key
+  useEffect(() => {
+    if (!merchantId) return;
     try {
-      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+      const key = getCartStorageKey(merchantId);
+      if (cart.length === 0) {
+        localStorage.removeItem(key);
+      } else {
+        localStorage.setItem(key, JSON.stringify(cart));
+      }
     } catch (e) {
       console.warn('Failed to persist cart to storage:', e);
     }
-  }, [cart]);
+  }, [cart, merchantId]);
 
   const cartTotalItems = useMemo(
     () => cart.reduce((sum, item) => sum + item.quantity, 0),

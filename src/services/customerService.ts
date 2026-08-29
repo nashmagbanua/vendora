@@ -1,5 +1,4 @@
 import { Customer, Order } from '../types';
-import { INITIAL_CUSTOMERS, DEFAULT_MERCHANT_ID } from '../data/initialData';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import {
   DbCustomer,
@@ -18,7 +17,7 @@ function getStoredCustomers(): Customer[] {
   } catch (e) {
     console.error('Failed to read customers from localStorage', e);
   }
-  return INITIAL_CUSTOMERS;
+  return [];
 }
 
 function setStoredCustomers(customers: Customer[]): void {
@@ -33,7 +32,7 @@ export const customerService = {
   /**
    * Fetch all customers for a merchant
    */
-  async getCustomers(merchantId: string = DEFAULT_MERCHANT_ID): Promise<Customer[]> {
+  async getCustomers(merchantId: string = ''): Promise<Customer[]> {
     if (!merchantId) return [];
 
     if (isSupabaseConfigured && supabase) {
@@ -65,8 +64,8 @@ export const customerService = {
   /**
    * Find a customer by phone number
    */
-  async getCustomerByPhone(phone: string, merchantId: string = DEFAULT_MERCHANT_ID): Promise<Customer | null> {
-    if (!merchantId) return null;
+  async getCustomerByPhone(phone: string, merchantId: string = ''): Promise<Customer | null> {
+    if (!merchantId || !phone) return null;
     const cleanPhone = phone.replace(/\s+/g, '');
     if (isSupabaseConfigured && supabase) {
       try {
@@ -95,8 +94,11 @@ export const customerService = {
    */
   async upsertCustomer(
     customerData: Partial<Customer> & { fullName: string; phone: string },
-    merchantId: string = DEFAULT_MERCHANT_ID
+    merchantId: string = ''
   ): Promise<Customer> {
+    if (!merchantId) {
+      throw new Error('Merchant ID is required to upsert customer.');
+    }
     const cleanPhone = customerData.phone.trim();
 
     if (isSupabaseConfigured && supabase) {
@@ -176,7 +178,7 @@ export const customerService = {
       if (!map.has(key)) {
         map.set(key, {
           id: `cust-${order.id}`,
-          merchantId: order.merchantId || DEFAULT_MERCHANT_ID,
+          merchantId: order.merchantId || '',
           fullName: order.customerName,
           phone: order.phone,
           address: order.address,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AppMode,
   CustomerTab,
@@ -8,7 +8,7 @@ import {
   Order,
   StoreSettings
 } from './types';
-import { DEFAULT_MERCHANT_ID } from './data/initialData';
+import { merchantService } from './services/merchantService';
 
 // Custom Hooks for Architecture Layering
 import { useAuth } from './hooks/useAuth';
@@ -45,6 +45,8 @@ import { MerchantBottomNav } from './components/merchant/MerchantBottomNav';
 import { MerchantAuthModal } from './components/merchant/MerchantAuthModal';
 import { MerchantOnboarding } from './components/merchant/MerchantOnboarding';
 import { OrderNotificationToast } from './components/merchant/OrderNotificationToast';
+import { isSupabaseConfigured } from './lib/supabase';
+import { AlertTriangle } from 'lucide-react';
 
 export default function App() {
   // Navigation & Mode States
@@ -53,12 +55,46 @@ export default function App() {
   const [merchantTab, setMerchantTab] = useState<MerchantTab>('home');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [incomingOrderNotification, setIncomingOrderNotification] = useState<Order | null>(null);
+  const [discoveredMerchantId, setDiscoveredMerchantId] = useState<string>('');
 
   // Authentication State
   const auth = useAuth();
 
   // Active Merchant ID determination
-  const activeMerchantId = auth.merchant?.id || (!auth.isAuthenticated ? DEFAULT_MERCHANT_ID : '');
+  const activeMerchantId = auth.merchant?.id || discoveredMerchantId || '';
+
+  // Discover active storefront merchant if not authenticated as merchant
+  useEffect(() => {
+    if (auth.isAuthenticated && auth.merchant?.id) {
+      return;
+    }
+
+    let isMounted = true;
+    const discoverStorefront = async () => {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const storeSlug = urlParams.get('store') || urlParams.get('merchant');
+        if (storeSlug) {
+          const m = await merchantService.getMerchantBySlug(storeSlug);
+          if (m && isMounted) {
+            setDiscoveredMerchantId(m.id);
+            return;
+          }
+        }
+        const firstActive = await merchantService.getFirstActiveMerchant();
+        if (firstActive && isMounted) {
+          setDiscoveredMerchantId(firstActive.id);
+        }
+      } catch (err) {
+        console.warn('Storefront merchant discovery error:', err);
+      }
+    };
+
+    discoverStorefront();
+    return () => {
+      isMounted = false;
+    };
+  }, [auth.isAuthenticated, auth.merchant?.id]);
 
   // Business State Hooks
   const { merchantId, categories, customers, addCategory, updateCategory, deleteCategory } = useMerchant(activeMerchantId);
@@ -86,7 +122,7 @@ export default function App() {
     updateQuantity,
     removeItem,
     clearCart
-  } = useCart();
+  } = useCart(activeMerchantId);
 
   // Modal and Flow States
   const [selectedProductForDetail, setSelectedProductForDetail] = useState<Product | null>(null);
@@ -135,14 +171,6 @@ export default function App() {
     setActiveConfirmedOrder(created);
   };
 
-  // Status progression
-  const handleAdvanceOrderStatus = async (orderId: string) => {
-    const updated = await advanceOrderStatus(orderId);
-    if (activeConfirmedOrder && activeConfirmedOrder.id === orderId) {
-      setActiveConfirmedOrder(updated);
-    }
-  };
-
   const handleMerchantUpdateOrderStatus = async (orderId: string, status: Order['status']) => {
     const updated = await updateOrderStatus(orderId, status);
     if (selectedMerchantOrder && selectedMerchantOrder.id === orderId) {
@@ -162,6 +190,23 @@ export default function App() {
       await deleteProduct(productId);
     }
   };
+
+  // Production configuration guard: never silently fall back to mock data in production
+  if (import.meta.env.PROD && !isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen bg-[#050507] text-[#e0e0e2] flex items-center justify-center p-6 text-center">
+        <div className="max-w-md p-8 bg-[#0e0f17] border border-[#1f202e] rounded-3xl shadow-xl space-y-4">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl font-bold text-white">System Configuration Notice</h2>
+          <p className="text-sm text-[#9496a1]">
+            Vendora is not configured correctly. Please contact the administrator.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#050507] text-[#e0e0e2] antialiased selection:bg-[#4f46e5] selection:text-white">
@@ -205,7 +250,6 @@ export default function App() {
                       setCustomerTab('home');
                     }}
                     onOpenReceipt={() => setViewingReceiptOrder(activeConfirmedOrder)}
-                    onAdvanceOrderStatus={handleAdvanceOrderStatus}
                   />
                 ) : customerTab === 'cart' ? (
                   <CartView

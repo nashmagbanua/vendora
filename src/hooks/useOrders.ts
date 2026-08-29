@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Order, OrderStatus, PaymentStatus } from '../types';
 import { orderService } from '../services/orderService';
-import { DEFAULT_MERCHANT_ID } from '../data/initialData';
 import { useMerchantOrderRealtime } from './useOrderRealtime';
 
 interface UseOrdersOptions {
@@ -11,7 +10,7 @@ interface UseOrdersOptions {
 }
 
 export function useOrders(
-  merchantId: string = DEFAULT_MERCHANT_ID,
+  merchantId: string = '',
   options: UseOrdersOptions = {}
 ) {
   const { onIncomingOrder, enableRealtime = true, isMerchantAuthenticated = false } = options;
@@ -20,6 +19,11 @@ export function useOrders(
   const [error, setError] = useState<string | null>(null);
 
   const refreshOrders = useCallback(async () => {
+    if (!merchantId) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);

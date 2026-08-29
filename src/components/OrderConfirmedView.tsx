@@ -1,21 +1,19 @@
 import React from 'react';
 import { Order, StoreSettings } from '../types';
-import { CheckCircle2, Check, Utensils, Flame, Truck, MapPin, Phone, User, Home, Receipt, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Check, Utensils, Flame, Truck, MapPin, Phone, User, Home, Receipt } from 'lucide-react';
 
 interface OrderConfirmedViewProps {
   order: Order;
   settings: StoreSettings;
   onBackToHome: () => void;
   onOpenReceipt: () => void;
-  onAdvanceOrderStatus?: (orderId: string) => void;
 }
 
 export const OrderConfirmedView: React.FC<OrderConfirmedViewProps> = ({
   order,
   settings,
   onBackToHome,
-  onOpenReceipt,
-  onAdvanceOrderStatus
+  onOpenReceipt
 }) => {
   // Determine active step in 4-step progress:
   // 1: Pending, 2: Accepted, 3: Preparing, 4: Ready/Completed
@@ -146,22 +144,6 @@ export const OrderConfirmedView: React.FC<OrderConfirmedViewProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Live Simulation Trigger (Customer Experience Enhancement) */}
-        {onAdvanceOrderStatus && currentStep < 4 && (
-          <div className="mt-6 pt-4 border-t border-[#1f202e] flex items-center justify-between bg-[#13141f] p-3 rounded-2xl border border-[#27273a]">
-            <span className="text-[12px] text-[#9496a1]">
-              Simulate kitchen cooking progress:
-            </span>
-            <button
-              onClick={() => onAdvanceOrderStatus(order.id)}
-              className="px-3 py-1 bg-[#181926] border border-[#27273a] text-[#818cf8] text-[12px] font-bold rounded-lg hover:bg-[#202234] flex items-center gap-1.5 cursor-pointer"
-            >
-              <RefreshCw className="w-3 h-3 animate-spin" />
-              <span>Next Stage</span>
-            </button>
-          </div>
-        )}
       </section>
 
       {/* Bento Grid: Delivery Details + Order Items */}
