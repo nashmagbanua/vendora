@@ -43,6 +43,7 @@ import { MerchantCustomers } from './components/merchant/MerchantCustomers';
 import { MerchantSettings } from './components/merchant/MerchantSettings';
 import { MerchantBottomNav } from './components/merchant/MerchantBottomNav';
 import { MerchantAuthModal } from './components/merchant/MerchantAuthModal';
+import { MerchantOnboarding } from './components/merchant/MerchantOnboarding';
 import { OrderNotificationToast } from './components/merchant/OrderNotificationToast';
 
 export default function App() {
@@ -57,7 +58,7 @@ export default function App() {
   const auth = useAuth();
 
   // Active Merchant ID determination
-  const activeMerchantId = auth.merchant?.id || (auth.isDemoMode || !auth.isAuthenticated ? DEFAULT_MERCHANT_ID : '');
+  const activeMerchantId = auth.merchant?.id || (!auth.isAuthenticated ? DEFAULT_MERCHANT_ID : '');
 
   // Business State Hooks
   const { merchantId, categories, customers, addCategory, updateCategory, deleteCategory } = useMerchant(activeMerchantId);
@@ -270,6 +271,17 @@ export default function App() {
 
       {/* ---------------- MERCHANT VIEW MODE ---------------- */}
       {mode === 'merchant' && (
+        !auth.merchant ? (
+          <MerchantOnboarding
+            user={auth.user}
+            profile={auth.profile}
+            onCreateStore={async (data) => {
+              await auth.createStore(data);
+            }}
+            onSignOut={handleSignOut}
+            onBackToStorefront={() => setMode('customer')}
+          />
+        ) : (
         <div className="min-h-screen flex bg-[#050507]">
           {/* Desktop Left Sidebar */}
           <MerchantSidebar
@@ -281,7 +293,6 @@ export default function App() {
             pendingOrdersCount={pendingOrdersCount}
             user={auth.user}
             role={auth.role}
-            isDemoMode={auth.isDemoMode}
             onSignOut={handleSignOut}
           />
 
@@ -293,7 +304,6 @@ export default function App() {
               onToggleStoreStatus={toggleStoreStatus}
               onSwitchToCustomer={() => setMode('customer')}
               role={auth.role}
-              isDemoMode={auth.isDemoMode}
               onSignOut={handleSignOut}
             />
 
@@ -411,6 +421,7 @@ export default function App() {
             />
           )}
         </div>
+        )
       )}
 
       {/* ---------------- MERCHANT AUTH MODAL ---------------- */}
@@ -427,11 +438,6 @@ export default function App() {
         }}
         onSignUp={async (signUpData) => {
           await auth.signUp(signUpData);
-          setShowAuthModal(false);
-          setMode('merchant');
-        }}
-        onEnableDemoMode={() => {
-          auth.enableDemoMode();
           setShowAuthModal(false);
           setMode('merchant');
         }}

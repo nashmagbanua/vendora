@@ -36,35 +36,53 @@ export const merchantService = {
    * Fetch merchant profile by ID
    */
   async getMerchant(merchantId: string = DEFAULT_MERCHANT_ID): Promise<Merchant | null> {
+    if (!merchantId) return null;
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
           .from('merchants')
           .select('*')
           .eq('id', merchantId)
-          .single();
+          .maybeSingle();
 
         if (!error && data) {
           return mapDbMerchantToMerchant(data as DbMerchant);
         }
       } catch (err) {
-        console.warn('Supabase getMerchant failed, using seed data:', err);
+        console.warn('[merchantService] Supabase getMerchant failed:', err);
       }
+      return null;
     }
-    return INITIAL_MERCHANT;
+    return INITIAL_MERCHANT.id === merchantId ? INITIAL_MERCHANT : null;
   },
 
   /**
    * Fetch store configuration and operational settings
    */
   async getStoreSettings(merchantId: string = DEFAULT_MERCHANT_ID): Promise<StoreSettings> {
+    if (!merchantId) {
+      return {
+        merchantId: '',
+        storeName: 'My Store',
+        storeDescription: '',
+        isOpen: true,
+        currency: '₱',
+        deliveryFee: 50,
+        phone: '',
+        address: '',
+        trialDaysLeft: 14,
+        plan: 'Growth Plan'
+      };
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
           .from('store_settings')
           .select('*')
           .eq('merchant_id', merchantId)
-          .single();
+          .maybeSingle();
 
         if (!error && data) {
           const mapped = mapDbSettingsToStoreSettings(data as DbStoreSettings);
@@ -72,11 +90,38 @@ export const merchantService = {
           return mapped;
         }
       } catch (err) {
-        console.warn('Supabase getStoreSettings failed, using local store:', err);
+        console.warn('[merchantService] Supabase getStoreSettings failed:', err);
       }
+      return {
+        merchantId,
+        storeName: 'My Store',
+        storeDescription: '',
+        isOpen: true,
+        currency: '₱',
+        deliveryFee: 50,
+        phone: '',
+        address: '',
+        trialDaysLeft: 14,
+        plan: 'Growth Plan'
+      };
     }
 
-    return getStoredSettings();
+    const stored = getStoredSettings();
+    if (stored.merchantId === merchantId) {
+      return stored;
+    }
+    return {
+      merchantId,
+      storeName: 'My Store',
+      storeDescription: '',
+      isOpen: true,
+      currency: '₱',
+      deliveryFee: 50,
+      phone: '',
+      address: '',
+      trialDaysLeft: 14,
+      plan: 'Growth Plan'
+    };
   },
 
   /**

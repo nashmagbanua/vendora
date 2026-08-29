@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Store, Lock, Mail, User, AlertCircle, ArrowLeft, Sparkles, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Store, Lock, Mail, User, AlertCircle, ArrowLeft, Loader2, Eye, EyeOff } from 'lucide-react';
 import { MerchantSignUpData, MerchantLoginCredentials } from '../../types';
 
 interface MerchantAuthModalProps {
@@ -7,7 +7,6 @@ interface MerchantAuthModalProps {
   onClose: () => void;
   onSignIn: (credentials: MerchantLoginCredentials) => Promise<any>;
   onSignUp: (data: MerchantSignUpData) => Promise<any>;
-  onEnableDemoMode: () => void;
   error: string | null;
   onClearError: () => void;
   isLoading: boolean;
@@ -18,7 +17,6 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
   onClose,
   onSignIn,
   onSignUp,
-  onEnableDemoMode,
   error,
   onClearError,
   isLoading
@@ -290,18 +288,6 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
               </button>
             </form>
           )}
-
-          {/* Quick Demo Mode Fallback */}
-          <div className="pt-2 border-t border-[#1f202e] text-center">
-            <button
-              type="button"
-              onClick={onEnableDemoMode}
-              className="w-full py-2.5 px-4 rounded-xl bg-[#13141f] hover:bg-[#181926] border border-[#27273a] text-[#818cf8] hover:text-white text-[13px] font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4 text-[#fb923c]" />
-              <span>Explore Demo Store (Juan&apos;s Kitchen)</span>
-            </button>
-          </div>
         </div>
       </div>
     </div>

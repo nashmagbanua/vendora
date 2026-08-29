@@ -157,18 +157,6 @@ export function useAuth() {
     }
   }, []);
 
-  const enableDemoMode = useCallback(async () => {
-    setAuthState((prev) => ({ ...prev, isLoading: true }));
-    const demoState = await authService.getInitialAuthState();
-    setAuthState({
-      ...demoState,
-      isDemoMode: true,
-      isAuthenticated: true,
-      isLoading: false,
-      error: null
-    });
-  }, []);
-
   const clearError = useCallback(() => {
     setAuthState((prev) => ({ ...prev, error: null }));
   }, []);
@@ -179,7 +167,6 @@ export function useAuth() {
     signUp,
     createStore,
     signOut,
-    enableDemoMode,
     clearError
   };
 }

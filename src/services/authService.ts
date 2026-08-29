@@ -9,32 +9,10 @@ import {
   MerchantLoginCredentials,
   AuthState
 } from '../types';
-import { INITIAL_MERCHANT, DEFAULT_MERCHANT_ID } from '../data/initialData';
 import { DbMerchant, mapDbMerchantToMerchant } from '../lib/dbMappers';
 
-const DEMO_USER: User = {
-  id: 'demo-user-juan',
-  email: 'juan@juanskitchen.ph',
-  fullName: 'Juan Dela Cruz',
-  role: 'owner',
-  createdAt: new Date().toISOString()
-};
-
-const DEMO_PROFILE: Profile = {
-  id: 'demo-user-juan',
-  email: 'juan@juanskitchen.ph',
-  fullName: 'Juan Dela Cruz',
-  role: 'owner',
-  createdAt: new Date().toISOString()
-};
-
-const DEMO_MEMBERSHIP: MerchantMember = {
-  id: 'mem-demo-1',
-  merchantId: DEFAULT_MERCHANT_ID,
-  userId: 'demo-user-juan',
-  role: 'owner',
-  joinedAt: new Date().toISOString()
-};
+const LOCAL_USER_KEY = 'vendora_auth_user';
+const LOCAL_MERCHANT_KEY = 'vendora_auth_merchant';
 
 export const authService = {
   /**
@@ -68,31 +46,48 @@ export const authService = {
       } catch (err: any) {
         console.warn('[authService] Failed to restore session from Supabase:', err);
       }
-
-      // No active session in configured Supabase
-      return {
-        user: null,
-        profile: null,
-        merchant: null,
-        role: null,
-        memberships: [],
-        isAuthenticated: false,
-        isLoading: false,
-        isDemoMode: false,
-        error: null
-      };
+    } else {
+      // Local fallback for development without Supabase credentials
+      try {
+        const savedUserStr = localStorage.getItem(LOCAL_USER_KEY);
+        const savedMerchantStr = localStorage.getItem(LOCAL_MERCHANT_KEY);
+        if (savedUserStr) {
+          const user: User = JSON.parse(savedUserStr);
+          const merchant: Merchant | null = savedMerchantStr ? JSON.parse(savedMerchantStr) : null;
+          const membership: MerchantMember[] = merchant ? [{
+            id: `mem-${user.id}`,
+            merchantId: merchant.id,
+            userId: user.id,
+            role: 'owner',
+            joinedAt: new Date().toISOString()
+          }] : [];
+          return {
+            user,
+            profile: { ...user },
+            merchant,
+            role: merchant ? 'owner' : null,
+            memberships: membership,
+            isAuthenticated: true,
+            isLoading: false,
+            isDemoMode: false,
+            error: null
+          };
+        }
+      } catch (e) {
+        console.warn('[authService] Local auth parse error', e);
+      }
     }
 
-    // Supabase not configured -> default to demo session for instant usability
+    // Default: not authenticated
     return {
-      user: DEMO_USER,
-      profile: DEMO_PROFILE,
-      merchant: INITIAL_MERCHANT,
-      role: 'owner',
-      memberships: [DEMO_MEMBERSHIP],
-      isAuthenticated: true,
+      user: null,
+      profile: null,
+      merchant: null,
+      role: null,
+      memberships: [],
+      isAuthenticated: false,
       isLoading: false,
-      isDemoMode: true,
+      isDemoMode: false,
       error: null
     };
   },
@@ -102,12 +97,19 @@ export const authService = {
    */
   async resolveUserData(userId: string, email: string): Promise<Omit<AuthState, 'isLoading' | 'isDemoMode' | 'error'>> {
     if (!this.isConfigured() || !supabase) {
-      return {
-        user: DEMO_USER,
-        profile: DEMO_PROFILE,
-        merchant: INITIAL_MERCHANT,
+      const user: User = {
+        id: userId,
+        email,
+        fullName: email.split('@')[0],
         role: 'owner',
-        memberships: [DEMO_MEMBERSHIP],
+        createdAt: new Date().toISOString()
+      };
+      return {
+        user,
+        profile: { ...user },
+        merchant: null,
+        role: null,
+        memberships: [],
         isAuthenticated: true
       };
     }
@@ -118,7 +120,7 @@ export const authService = {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       const profile: Profile = dbProfile ? {
         id: dbProfile.id,
@@ -174,7 +176,7 @@ export const authService = {
           .from('merchants')
           .select('*')
           .eq('id', primaryMembership.merchantId)
-          .single();
+          .maybeSingle();
 
         if (!mErr && dbMerchant) {
           merchant = mapDbMerchantToMerchant(dbMerchant as DbMerchant);
@@ -201,7 +203,7 @@ export const authService = {
    */
   async signUp(data: MerchantSignUpData): Promise<AuthState> {
     if (!this.isConfigured() || !supabase) {
-      // Local/Demo Mode Signup
+      // Local Mode Signup
       const localUser: User = {
         id: `user-${Date.now()}`,
         email: data.email,
@@ -224,6 +226,13 @@ export const authService = {
         joinedAt: new Date().toISOString()
       };
 
+      try {
+        localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(localUser));
+        localStorage.setItem(LOCAL_MERCHANT_KEY, JSON.stringify(localMerchant));
+      } catch (e) {
+        console.warn('[authService] Failed to persist local user', e);
+      }
+
       return {
         user: localUser,
         profile: { ...localUser },
@@ -232,7 +241,7 @@ export const authService = {
         memberships: [localMembership],
         isAuthenticated: true,
         isLoading: false,
-        isDemoMode: true,
+        isDemoMode: false,
         error: null
       };
     }
@@ -318,16 +327,39 @@ export const authService = {
    */
   async signIn(credentials: MerchantLoginCredentials): Promise<AuthState> {
     if (!this.isConfigured() || !supabase) {
-      // Demo login
-      return {
-        user: DEMO_USER,
-        profile: DEMO_PROFILE,
-        merchant: INITIAL_MERCHANT,
+      // Local sign in fallback
+      const localUser: User = {
+        id: `user-${credentials.email.replace(/[^a-z0-9]/gi, '')}`,
+        email: credentials.email,
+        fullName: credentials.email.split('@')[0],
         role: 'owner',
-        memberships: [DEMO_MEMBERSHIP],
+        createdAt: new Date().toISOString()
+      };
+      const savedMerchantStr = localStorage.getItem(LOCAL_MERCHANT_KEY);
+      const merchant: Merchant | null = savedMerchantStr ? JSON.parse(savedMerchantStr) : null;
+      const memberships: MerchantMember[] = merchant ? [{
+        id: `mem-${localUser.id}`,
+        merchantId: merchant.id,
+        userId: localUser.id,
+        role: 'owner',
+        joinedAt: new Date().toISOString()
+      }] : [];
+
+      try {
+        localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(localUser));
+      } catch (e) {
+        console.warn('[authService] Failed to persist local user', e);
+      }
+
+      return {
+        user: localUser,
+        profile: { ...localUser },
+        merchant,
+        role: merchant ? 'owner' : null,
+        memberships,
         isAuthenticated: true,
         isLoading: false,
-        isDemoMode: true,
+        isDemoMode: false,
         error: null
       };
     }
@@ -360,26 +392,43 @@ export const authService = {
    */
   async createStore(data: MerchantCreateStoreData): Promise<AuthState> {
     if (!this.isConfigured() || !supabase) {
+      const localUserStr = localStorage.getItem(LOCAL_USER_KEY);
+      const user: User = localUserStr ? JSON.parse(localUserStr) : {
+        id: `user-${Date.now()}`,
+        email: 'merchant@store.ph',
+        fullName: 'Store Owner',
+        role: 'owner',
+        createdAt: new Date().toISOString()
+      };
+
       const localMerchant: Merchant = {
         id: `merchant-${Date.now()}`,
         name: data.storeName,
         slug: data.storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        ownerId: user.id,
         createdAt: new Date().toISOString()
       };
+
+      try {
+        localStorage.setItem(LOCAL_MERCHANT_KEY, JSON.stringify(localMerchant));
+      } catch (e) {
+        console.warn('[authService] Failed to persist merchant', e);
+      }
+
       return {
-        user: DEMO_USER,
-        profile: DEMO_PROFILE,
+        user,
+        profile: { ...user },
         merchant: localMerchant,
         role: 'owner',
         memberships: [{
           id: `mem-${Date.now()}`,
           merchantId: localMerchant.id,
-          userId: DEMO_USER.id,
+          userId: user.id,
           role: 'owner'
         }],
         isAuthenticated: true,
         isLoading: false,
-        isDemoMode: true,
+        isDemoMode: false,
         error: null
       };
     }
@@ -448,6 +497,8 @@ export const authService = {
    */
   async signOut(): Promise<void> {
     try {
+      localStorage.removeItem(LOCAL_USER_KEY);
+      localStorage.removeItem(LOCAL_MERCHANT_KEY);
       localStorage.removeItem('vendora_orders_cache');
       localStorage.removeItem('vendora_products_cache');
       localStorage.removeItem('vendora_categories_cache');
@@ -461,7 +512,7 @@ export const authService = {
       try {
         await supabase.auth.signOut();
       } catch (err) {
-        console.warn('[authService] Supabase sign out error:', err);
+        console.error('[authService] Supabase signOut error:', err);
       }
     }
   },
@@ -471,7 +522,7 @@ export const authService = {
    */
   async switchMerchant(merchantId: string, currentUserId: string): Promise<{ merchant: Merchant | null; role: 'owner' | 'admin' | 'staff' | null }> {
     if (!this.isConfigured() || !supabase) {
-      return { merchant: INITIAL_MERCHANT, role: 'owner' };
+      return { merchant: null, role: 'owner' };
     }
 
     const { data: dbMembership } = await supabase
@@ -479,7 +530,7 @@ export const authService = {
       .select('*')
       .eq('merchant_id', merchantId)
       .eq('user_id', currentUserId)
-      .single();
+      .maybeSingle();
 
     if (!dbMembership) {
       throw new Error('Access denied: You are not a member of this merchant.');
@@ -489,7 +540,7 @@ export const authService = {
       .from('merchants')
       .select('*')
       .eq('id', merchantId)
-      .single();
+      .maybeSingle();
 
     return {
       merchant: dbMerchant ? mapDbMerchantToMerchant(dbMerchant as DbMerchant) : null,

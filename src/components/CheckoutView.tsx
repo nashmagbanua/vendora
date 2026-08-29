@@ -30,13 +30,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const deliveryFee = fulfillment === 'delivery' ? settings.deliveryFee : 0;
   const total = subtotal + deliveryFee;
 
-  const handleFillDemo = () => {
-    setFullName('Maria Santos');
-    setPhoneNumber('0917 123 4567');
-    setAddress('123 Sampaguita St., Brgy. San Lorenzo, Makati City');
-    setValidationError(null);
-  };
-
   const handlePlaceOrder = () => {
     setValidationError(null);
     if (!fullName.trim() || !phoneNumber.trim()) {
@@ -134,27 +127,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
       {/* Main Content */}
       <main className="pt-20 px-4 md:px-8 max-w-3xl mx-auto space-y-6">
-        {/* Merchant Preview Banner */}
-        <div className="bg-[#0e0f17] rounded-2xl p-4 flex items-start justify-between gap-3 border border-[#27273a] border-dashed shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
-          <div className="flex items-start gap-3">
-            <span className="material-symbols-outlined text-[#818cf8] mt-0.5 text-[22px]">storefront</span>
-            <div>
-              <p className="text-[13px] text-[#e0e0e2] leading-relaxed">
-                <strong className="text-white">{settings.storeName || "Store"} Checkout</strong> • Multi-tenant guest order pipeline.
-              </p>
-            </div>
-          </div>
-          {(!fullName || !phoneNumber) && (
-            <button
-              type="button"
-              onClick={handleFillDemo}
-              className="text-[12px] font-semibold text-[#818cf8] bg-[#181926] border border-[#27273a] px-3 py-1 rounded-lg hover:bg-[#202234] transition-colors whitespace-nowrap cursor-pointer"
-            >
-              Fill Demo Info
-            </button>
-          )}
-        </div>
-
         {validationError && (
           <div className="p-4 bg-red-950/40 border border-red-800/60 rounded-2xl text-red-300 text-[14px]">
             {validationError}

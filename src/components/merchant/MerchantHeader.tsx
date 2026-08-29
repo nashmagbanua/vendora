@@ -8,7 +8,6 @@ interface MerchantHeaderProps {
   onSwitchToCustomer: () => void;
   title?: string;
   role?: 'owner' | 'admin' | 'staff' | null;
-  isDemoMode?: boolean;
   onSignOut?: () => void;
 }
 
@@ -18,7 +17,6 @@ export const MerchantHeader: React.FC<MerchantHeaderProps> = ({
   onSwitchToCustomer,
   title,
   role,
-  isDemoMode,
   onSignOut
 }) => {
   return (
@@ -33,9 +31,6 @@ export const MerchantHeader: React.FC<MerchantHeaderProps> = ({
           </h1>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-bold text-[#fb923c] uppercase">{role || 'owner'}</span>
-            {isDemoMode && (
-              <span className="text-[9px] font-bold text-[#60a5fa] bg-[#3b82f6]/20 px-1 rounded">Demo</span>
-            )}
           </div>
         </div>
       </div>

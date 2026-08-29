@@ -34,6 +34,8 @@ export const customerService = {
    * Fetch all customers for a merchant
    */
   async getCustomers(merchantId: string = DEFAULT_MERCHANT_ID): Promise<Customer[]> {
+    if (!merchantId) return [];
+
     if (isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
@@ -42,24 +44,29 @@ export const customerService = {
           .eq('merchant_id', merchantId)
           .order('total_spent', { ascending: false });
 
-        if (!error && data && data.length > 0) {
-          const mapped = data.map((c: DbCustomer) => mapDbCustomerToCustomer(c));
-          setStoredCustomers(mapped);
-          return mapped;
+        if (error) {
+          console.warn('[customerService] Supabase customer fetch error:', error.message);
+          return [];
+        }
+
+        if (data) {
+          return data.map((c: DbCustomer) => mapDbCustomerToCustomer(c));
         }
       } catch (err) {
-        console.warn('Supabase customer fetch failed, using local store:', err);
+        console.warn('[customerService] Supabase customer fetch failed:', err);
+        return [];
       }
     }
 
     const all = getStoredCustomers();
-    return all.filter((c) => (c.merchantId ? c.merchantId === merchantId : true));
+    return all.filter((c) => c.merchantId === merchantId);
   },
 
   /**
    * Find a customer by phone number
    */
   async getCustomerByPhone(phone: string, merchantId: string = DEFAULT_MERCHANT_ID): Promise<Customer | null> {
+    if (!merchantId) return null;
     const cleanPhone = phone.replace(/\s+/g, '');
     if (isSupabaseConfigured && supabase) {
       try {
@@ -68,14 +75,15 @@ export const customerService = {
           .select('*')
           .eq('merchant_id', merchantId)
           .eq('phone', cleanPhone)
-          .single();
+          .maybeSingle();
 
         if (!error && data) {
           return mapDbCustomerToCustomer(data as DbCustomer);
         }
       } catch (err) {
-        console.warn('Supabase getCustomerByPhone failed:', err);
+        console.warn('[customerService] Supabase getCustomerByPhone failed:', err);
       }
+      return null;
     }
 
     const customers = await this.getCustomers(merchantId);

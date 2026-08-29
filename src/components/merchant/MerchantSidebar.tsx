@@ -11,7 +11,6 @@ interface MerchantSidebarProps {
   pendingOrdersCount: number;
   user?: User | null;
   role?: 'owner' | 'admin' | 'staff' | null;
-  isDemoMode?: boolean;
   onSignOut?: () => void;
 }
 
@@ -24,7 +23,6 @@ export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
   pendingOrdersCount,
   user,
   role,
-  isDemoMode,
   onSignOut
 }) => {
   return (
@@ -43,11 +41,6 @@ export const MerchantSidebar: React.FC<MerchantSidebarProps> = ({
               <span className="text-[11px] font-semibold text-[#fb923c] uppercase tracking-wider">
                 {role || 'owner'}
               </span>
-              {isDemoMode && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#3b82f6]/20 text-[#60a5fa] border border-[#3b82f6]/30">
-                  Demo
-                </span>
-              )}
             </div>
             {user?.email && (
               <span className="text-[11px] text-[#6b7280] truncate mt-0.5">

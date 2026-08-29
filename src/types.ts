@@ -52,7 +52,7 @@ export interface AuthState {
   memberships: MerchantMember[];
   isAuthenticated: boolean;
   isLoading: boolean;
-  isDemoMode: boolean;
+  isDemoMode?: boolean;
   error: string | null;
 }
 
