@@ -7,7 +7,7 @@ interface MerchantOnboardingProps {
   profile: Profile | null;
   onCreateStore: (data: MerchantCreateStoreData) => Promise<any>;
   onSignOut: () => void;
-  onBackToStorefront: () => void;
+  onBackToStorefront?: () => void;
 }
 
 export const MerchantOnboarding: React.FC<MerchantOnboardingProps> = ({
@@ -58,13 +58,15 @@ export const MerchantOnboarding: React.FC<MerchantOnboardingProps> = ({
       <div className="w-full max-w-xl bg-[#0a0a0f] border border-[#1f202e] rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden">
         {/* Header Section */}
         <div className="p-6 sm:p-8 bg-gradient-to-b from-[#13141f] to-[#0a0a0f] border-b border-[#1f202e] text-center relative">
-          <div className="flex justify-between items-center mb-4">
-            <button
-              onClick={onBackToStorefront}
-              className="text-[13px] text-[#9496a1] hover:text-white transition-colors cursor-pointer"
-            >
-              ← Back to Storefront
-            </button>
+          <div className={`flex ${onBackToStorefront ? 'justify-between' : 'justify-end'} items-center mb-4`}>
+            {onBackToStorefront && (
+              <button
+                onClick={onBackToStorefront}
+                className="text-[13px] text-[#9496a1] hover:text-white transition-colors cursor-pointer"
+              >
+                ← Back to Storefront
+              </button>
+            )}
             <button
               onClick={onSignOut}
               className="flex items-center gap-1.5 text-[13px] text-[#ef4444] hover:text-[#f87171] transition-colors cursor-pointer"

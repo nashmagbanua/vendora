@@ -1,13 +1,11 @@
 import React from 'react';
 import { StoreSettings, CustomerTab } from '../types';
-import { Store, ShoppingBag } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
 
 interface CustomerHeaderProps {
   settings: StoreSettings;
   cartCount: number;
   onOpenCart: () => void;
-  onSwitchMode?: () => void;
-  onSwitchToMerchant?: () => void;
   activeTab?: CustomerTab;
   onChangeTab?: (tab: CustomerTab) => void;
   title?: string;
@@ -20,8 +18,6 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
   settings,
   cartCount,
   onOpenCart,
-  onSwitchMode,
-  onSwitchToMerchant,
   activeTab,
   onChangeTab,
   title,
@@ -29,8 +25,6 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
   onBack,
   rightAction
 }) => {
-  const handleSwitch = onSwitchToMerchant || onSwitchMode;
-
   return (
     <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 md:px-8 h-16 pt-safe bg-[#0a0a0f]/90 backdrop-blur-md border-b border-[#1f202e] shadow-[0_4px_20px_rgba(0,0,0,0.5)] transition-all duration-300">
       <div className="flex items-center gap-3">
@@ -100,19 +94,6 @@ export const CustomerHeader: React.FC<CustomerHeaderProps> = ({
               )}
               {settings.isOpen ? 'Open' : 'Closed'}
             </span>
-
-            {/* Merchant Portal Switcher Button */}
-            {handleSwitch && (
-              <button
-                onClick={handleSwitch}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full text-[12px] font-semibold text-[#c7d2fe] bg-[#181926] hover:bg-[#202234] border border-[#2e3048] transition-colors cursor-pointer"
-                title="Switch to Merchant Dashboard"
-              >
-                <Store className="w-3.5 h-3.5 text-[#818cf8]" />
-                <span className="hidden sm:inline">Merchant View</span>
-                <span className="sm:hidden text-[11px]">Merchant</span>
-              </button>
-            )}
 
             {/* Cart Icon for Desktop & Mobile */}
             <button

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Product, Category, StoreSettings } from '../types';
-import { ShoppingCart, Plus, Search, Sparkles, Utensils } from 'lucide-react';
+import { ShoppingCart, Plus, Search, Sparkles, Utensils, TrendingUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface CustomerStorefrontProps {
   products: Product[];
@@ -8,7 +9,6 @@ interface CustomerStorefrontProps {
   settings: StoreSettings;
   onSelectProduct: (product: Product) => void;
   onQuickAddToCart: (product: Product) => void;
-  onSwitchMode?: () => void;
 }
 
 export const CustomerStorefront: React.FC<CustomerStorefrontProps> = ({
@@ -16,11 +16,66 @@ export const CustomerStorefront: React.FC<CustomerStorefrontProps> = ({
   categories,
   settings,
   onSelectProduct,
-  onQuickAddToCart,
-  onSwitchMode
+  onQuickAddToCart
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Dynamic suggestions built directly from merchant store data
+  const suggestions = useMemo(() => {
+    const list: string[] = [];
+    const activeProducts = products.filter((p) => p.isActive);
+    const featured = activeProducts.filter((p) => p.isFeatured);
+
+    if (featured.length > 0) {
+      featured.slice(0, 3).forEach((p) => list.push(`Search "${p.name}" in ${settings.store_name || 'store'}...`));
+    } else if (activeProducts.length > 0) {
+      activeProducts.slice(0, 3).forEach((p) => list.push(`Search "${p.name}"...`));
+    }
+
+    if (categories.length > 0) {
+      categories.slice(0, 3).forEach((c) => list.push(`Craving ${c.name}? Find it here...`));
+    }
+
+    if (settings.store_name) {
+      list.push(`Explore ${settings.store_name}'s full menu...`);
+    } else {
+      list.push('Search for food, drinks, or items...');
+    }
+
+    return list.length > 0 ? list : ['Search for food, drinks, or items...'];
+  }, [products, categories, settings.store_name]);
+
+  const [currentSuggestionIndex, setCurrentSuggestionIndex] = useState(0);
+
+  // Cycle suggestions with smooth animation
+  useEffect(() => {
+    if (suggestions.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentSuggestionIndex((prev) => (prev + 1) % suggestions.length);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [suggestions]);
+
+  // Quick suggestion chips based on store items
+  const quickChips = useMemo(() => {
+    const chips: string[] = [];
+    products
+      .filter((p) => p.isActive && p.isFeatured)
+      .slice(0, 3)
+      .forEach((p) => chips.push(p.name));
+
+    if (chips.length < 3) {
+      categories.slice(0, 3 - chips.length).forEach((c) => chips.push(c.name));
+    }
+
+    if (chips.length === 0 && products.length > 0) {
+      const activeFirst = products.find((p) => p.isActive);
+      if (activeFirst) chips.push(activeFirst.name);
+    }
+    return chips;
+  }, [products, categories]);
 
   const featuredProduct = products.find((p) => p.isFeatured && p.isActive) || products[0];
 
@@ -36,47 +91,79 @@ export const CustomerStorefront: React.FC<CustomerStorefrontProps> = ({
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-8 px-4 md:px-8 pt-4 pb-12 text-[#e0e0e2]">
-      {/* Merchant Switcher Banner for Easy Demo Access */}
-      {onSwitchMode && (
-        <div className="bg-[#0e0f17] rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-[#1f202e] shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#4f46e5] text-white flex items-center justify-center shrink-0 shadow-sm">
-              <Utensils className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-[13px] font-semibold text-white">Storefront & POS System Live</p>
-              <p className="text-[12px] text-[#9496a1]">Customers order here. Switch to Merchant Dashboard anytime.</p>
-            </div>
+      {/* Search Bar with Dynamic Animated Suggestions */}
+      <section className="relative group space-y-2.5">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#6b7280] group-focus-within:text-[#818cf8] transition-colors z-10">
+            <Search className="w-5 h-5" />
           </div>
-          <button
-            onClick={onSwitchMode}
-            className="self-end sm:self-auto px-4 py-2 rounded-xl bg-[#4f46e5] text-white text-[13px] font-semibold hover:bg-[#6366f1] shadow-xs active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>Open Merchant Portal</span>
-            <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-          </button>
-        </div>
-      )}
+          <input
+            ref={inputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="block w-full pl-12 pr-10 py-3.5 sm:py-4 rounded-2xl bg-[#0e0f17] border border-[#27273a] text-[15px] text-[#e0e0e2] placeholder-transparent focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent shadow-[0_4px_20px_rgba(0,0,0,0.4)] transition-all duration-300 hover:border-[#3b3c58] relative z-1"
+          />
 
-      {/* Search Bar */}
-      <section className="relative group">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#6b7280] group-focus-within:text-[#818cf8] transition-colors">
-          <Search className="w-5 h-5" />
+          {/* Animated Suggestion Placeholder */}
+          {!searchQuery && (
+            <div
+              onClick={() => inputRef.current?.focus()}
+              className="absolute inset-y-0 left-12 right-10 flex items-center overflow-hidden pointer-events-none z-1"
+            >
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={currentSuggestionIndex}
+                  initial={{ y: 14, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -14, opacity: 0 }}
+                  transition={{ duration: 0.35, ease: 'easeOut' }}
+                  className="text-[14px] sm:text-[15px] text-[#6b7280] font-normal truncate"
+                >
+                  {suggestions[currentSuggestionIndex]}
+                </motion.span>
+              </AnimatePresence>
+            </div>
+          )}
+
+          {searchQuery && (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                inputRef.current?.focus();
+              }}
+              className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#6b7280] hover:text-white cursor-pointer z-10"
+              aria-label="Clear search"
+            >
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
+          )}
         </div>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search for food, drinks, or items..."
-          className="block w-full pl-12 pr-4 py-3.5 sm:py-4 rounded-2xl bg-[#0e0f17] border border-[#27273a] text-[15px] text-[#e0e0e2] placeholder-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#6366f1] focus:border-transparent shadow-[0_4px_20px_rgba(0,0,0,0.4)] transition-all duration-300 hover:border-[#3b3c58]"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#6b7280] hover:text-white cursor-pointer"
+
+        {/* Quick Suggestion Chips based on Store Items */}
+        {quickChips.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 overflow-x-auto hide-scrollbar text-[12px] text-[#9496a1] pt-0.5"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
-          </button>
+            <span className="flex items-center gap-1 shrink-0 text-[#818cf8] font-semibold text-[11px] uppercase tracking-wider">
+              <TrendingUp className="w-3.5 h-3.5" />
+              Try:
+            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {quickChips.map((chip, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setSearchQuery(chip)}
+                  className="px-2.5 py-1 rounded-lg bg-[#13141f] hover:bg-[#1f202e] border border-[#27273a] hover:border-[#6366f1]/60 text-[#9496a1] hover:text-white text-[12px] font-medium transition-all active:scale-95 cursor-pointer whitespace-nowrap flex items-center gap-1"
+                >
+                  <span>{chip}</span>
+                </button>
+              ))}
+            </div>
+          </motion.div>
         )}
       </section>
 
