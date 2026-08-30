@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Store, Lock, Mail, User, AlertCircle, ArrowLeft, Loader2, Eye, EyeOff, MailCheck } from 'lucide-react';
+import { Store, Lock, Mail, User, AlertCircle, ArrowLeft, ArrowRight, Loader2, Eye, EyeOff, MailCheck, CheckCircle2 } from 'lucide-react';
 import { MerchantSignUpData, MerchantLoginCredentials } from '../../types';
 
 interface MerchantAuthModalProps {
@@ -24,6 +24,7 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
   isStandalone = false
 }) => {
   const [tab, setTab] = useState<'signin' | 'signup'>('signin');
+  const [signupStep, setSignupStep] = useState<1 | 2 | 3 | 4>(1);
   const [showPassword, setShowPassword] = useState(false);
   const [emailConfirmationSent, setEmailConfirmationSent] = useState<string | null>(null);
 
@@ -31,7 +32,7 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
-  // Sign Up Form State
+  // Sign Up Form State (Preserved across steps)
   const [fullName, setFullName] = useState('');
   const [storeName, setStoreName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
@@ -52,8 +53,33 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
     }
   };
 
-  const handleSignUpSubmit = async (e: React.FormEvent) => {
+  const handleNextStep = (e: React.FormEvent) => {
     e.preventDefault();
+    onClearError();
+
+    if (signupStep === 1) {
+      if (!fullName.trim()) return;
+      setSignupStep(2);
+    } else if (signupStep === 2) {
+      if (!storeName.trim()) return;
+      setSignupStep(3);
+    } else if (signupStep === 3) {
+      if (!signupEmail.trim() || !signupEmail.includes('@')) return;
+      setSignupStep(4);
+    } else if (signupStep === 4) {
+      handleFinalSignUp();
+    }
+  };
+
+  const handlePrevStep = () => {
+    onClearError();
+    if (signupStep > 1) {
+      setSignupStep((prev) => (prev - 1) as 1 | 2 | 3 | 4);
+    }
+  };
+
+  const handleFinalSignUp = async () => {
+    if (signupPassword.length < 6) return;
     onClearError();
     setEmailConfirmationSent(null);
     try {
@@ -76,6 +102,14 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
     if (onClose) {
       onClose();
     }
+  };
+
+  const isStepValid = () => {
+    if (signupStep === 1) return fullName.trim().length > 0;
+    if (signupStep === 2) return storeName.trim().length > 0;
+    if (signupStep === 3) return signupEmail.trim().length > 0 && signupEmail.includes('@');
+    if (signupStep === 4) return signupPassword.length >= 6;
+    return false;
   };
 
   const cardContent = (
@@ -152,9 +186,11 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
                 Check Your Email
               </h3>
               <p className="text-[13px] text-[#9496a1] leading-relaxed max-w-sm mx-auto">
-                Account created successfully! We sent a confirmation link to{' '}
+                Your account was created successfully. We sent a confirmation link to{' '}
                 <span className="font-semibold text-white">{emailConfirmationSent}</span>.
-                Please confirm your email before signing in to set up your store.
+              </p>
+              <p className="text-[12px] text-[#717382]">
+                Please confirm your email before signing in to continue setting up your store.
               </p>
             </div>
 
@@ -186,7 +222,7 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
           <>
             {/* Error Message */}
             {error && (
-              <div className="flex items-start gap-3 p-3.5 bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-xl text-[#f87171] text-[13px]">
+              <div className="flex items-start gap-3 p-3.5 bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-xl text-[#f87171] text-[13px] animate-in fade-in duration-150">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <span>{error}</span>
@@ -254,98 +290,208 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
                 </button>
               </form>
             ) : (
-              /* Sign Up Form */
-              <form onSubmit={handleSignUpSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
-                    Your Full Name
-                  </label>
-                  <div className="relative">
-                    <User className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Juan Dela Cruz"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
-                    />
+              /* ONE-AT-A-TIME Guided Sign Up Wizard */
+              <form onSubmit={handleNextStep} className="space-y-5">
+                {/* Step Progress Indicator */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-[#818cf8] tracking-wider uppercase">
+                    <span>Step {signupStep} of 4</span>
+                    <span className="text-[#9496a1] font-medium lowercase">
+                      {signupStep === 1 && 'your name'}
+                      {signupStep === 2 && 'business name'}
+                      {signupStep === 3 && 'email'}
+                      {signupStep === 4 && 'secure password'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[1, 2, 3, 4].map((stepNumber) => (
+                      <div
+                        key={stepNumber}
+                        className={`h-1.5 rounded-full transition-all duration-300 ${
+                          stepNumber < signupStep
+                            ? 'bg-[#10b981]'
+                            : stepNumber === signupStep
+                            ? 'bg-[#6366f1]'
+                            : 'bg-[#1f202e]'
+                        }`}
+                      />
+                    ))}
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
-                    Store / Restaurant Name
-                  </label>
-                  <div className="relative">
-                    <Store className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g., Juan's Kitchen Makati"
-                      value={storeName}
-                      onChange={(e) => setStoreName(e.target.value)}
-                      className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
-                    />
-                  </div>
-                </div>
+                {/* Step 1: Full Name */}
+                {signupStep === 1 && (
+                  <div className="space-y-3.5 animate-in fade-in slide-in-from-right-4 duration-200">
+                    <div className="space-y-1">
+                      <h3 className="text-[17px] font-bold text-white tracking-tight">
+                        What&apos;s your name?
+                      </h3>
+                      <p className="text-[13px] text-[#9496a1] leading-relaxed">
+                        Enter your full name. This will be used for your Vendora account.
+                      </p>
+                    </div>
 
-                <div>
-                  <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="email"
-                      required
-                      placeholder="owner@yourstore.ph"
-                      value={signupEmail}
-                      onChange={(e) => setSignupEmail(e.target.value)}
-                      className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
-                    />
+                    <div>
+                      <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
+                        Full Name
+                      </label>
+                      <div className="relative">
+                        <User className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          autoFocus
+                          placeholder="Juan Dela Cruz"
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-3 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1] transition-all"
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <div>
-                  <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
-                    Password (min 6 characters)
-                  </label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      minLength={6}
-                      placeholder="••••••••"
-                      value={signupPassword}
-                      onChange={(e) => setSignupPassword(e.target.value)}
-                      className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-10 py-2.5 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1]"
-                    />
+                {/* Step 2: Store Name */}
+                {signupStep === 2 && (
+                  <div className="space-y-3.5 animate-in fade-in slide-in-from-right-4 duration-200">
+                    <div className="space-y-1">
+                      <h3 className="text-[17px] font-bold text-white tracking-tight">
+                        What&apos;s your business called?
+                      </h3>
+                      <p className="text-[13px] text-[#9496a1] leading-relaxed">
+                        This is the name your customers will see on your online store.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
+                        Store / Restaurant Name
+                      </label>
+                      <div className="relative">
+                        <Store className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          required
+                          autoFocus
+                          placeholder="e.g., Juan's Kitchen Makati"
+                          value={storeName}
+                          onChange={(e) => setStoreName(e.target.value)}
+                          className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-3 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1] transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3: Email Address */}
+                {signupStep === 3 && (
+                  <div className="space-y-3.5 animate-in fade-in slide-in-from-right-4 duration-200">
+                    <div className="space-y-1">
+                      <h3 className="text-[17px] font-bold text-white tracking-tight">
+                        What&apos;s your email address?
+                      </h3>
+                      <p className="text-[13px] text-[#9496a1] leading-relaxed">
+                        We&apos;ll use this email to secure your account and help you sign in.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
+                        Email Address
+                      </label>
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="email"
+                          required
+                          autoFocus
+                          placeholder="owner@yourstore.ph"
+                          value={signupEmail}
+                          onChange={(e) => setSignupEmail(e.target.value)}
+                          className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-4 py-3 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1] transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 4: Password */}
+                {signupStep === 4 && (
+                  <div className="space-y-3.5 animate-in fade-in slide-in-from-right-4 duration-200">
+                    <div className="space-y-1">
+                      <h3 className="text-[17px] font-bold text-white tracking-tight">
+                        Create your password
+                      </h3>
+                      <p className="text-[13px] text-[#9496a1] leading-relaxed">
+                        Use at least 6 characters. Keep it private and secure.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-[12px] font-semibold text-[#9496a1] mb-1.5">
+                        Password (min 6 characters)
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-[#6b7280] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          autoFocus
+                          minLength={6}
+                          placeholder="••••••••"
+                          value={signupPassword}
+                          onChange={(e) => setSignupPassword(e.target.value)}
+                          className="w-full bg-[#13141f] text-white text-[14px] pl-10 pr-10 py-3 rounded-xl border border-[#1f202e] focus:outline-none focus:border-[#6366f1] focus:ring-1 focus:ring-[#6366f1] transition-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7280] hover:text-[#9496a1]"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Navigation Buttons */}
+                <div className="pt-2 flex items-center gap-3">
+                  {signupStep > 1 && (
                     <button
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7280] hover:text-[#9496a1]"
+                      onClick={handlePrevStep}
+                      disabled={isLoading}
+                      className="px-4 py-3 bg-[#181926] hover:bg-[#202234] border border-[#27273a] text-[#c7d2fe] font-semibold rounded-xl text-[14px] transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      <ArrowLeft className="w-4 h-4" />
+                      <span>Back</span>
                     </button>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-3 bg-[#4f46e5] hover:bg-[#6366f1] text-white font-bold rounded-xl shadow-md text-[14px] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Creating Account...</span>
-                    </>
-                  ) : (
-                    <span>Create Store & Launch Dashboard</span>
                   )}
-                </button>
+
+                  <button
+                    type="submit"
+                    disabled={!isStepValid() || isLoading}
+                    className="flex-1 py-3 bg-[#4f46e5] hover:bg-[#6366f1] text-white font-bold rounded-xl shadow-md text-[14px] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Creating Account...</span>
+                      </>
+                    ) : signupStep === 4 ? (
+                      <>
+                        <span>Create My Account</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    ) : (
+                      <>
+                        <span>Continue</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
               </form>
             )}
           </>
@@ -370,3 +516,4 @@ export const MerchantAuthModal: React.FC<MerchantAuthModalProps> = ({
     </div>
   );
 };
+
