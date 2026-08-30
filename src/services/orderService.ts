@@ -1,5 +1,5 @@
 import { Order, OrderStatus, PaymentStatus } from '../types';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, isUUID } from '../lib/supabase';
 import {
   DbOrder,
   DbOrderItem,
@@ -70,7 +70,7 @@ export const orderService = {
   async getOrders(merchantId: string = ''): Promise<Order[]> {
     if (!merchantId) return [];
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(merchantId)) {
       try {
         const { data: dbOrders, error: orderErr } = await supabase
           .from('orders')
@@ -120,7 +120,7 @@ export const orderService = {
   async getOrderById(id: string, merchantId: string = '', trackingToken?: string): Promise<Order | null> {
     if (!id) return null;
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(id)) {
       try {
         // If tracking token is provided, attempt secure RPC lookup
         if (trackingToken) {
@@ -138,7 +138,7 @@ export const orderService = {
           .select('*')
           .eq('id', id);
 
-        if (merchantId) {
+        if (merchantId && isUUID(merchantId)) {
           query.eq('merchant_id', merchantId);
         }
 
@@ -170,7 +170,7 @@ export const orderService = {
     const guestTokens = tokens.filter((t) => !t.merchantId || !merchantId || t.merchantId === merchantId);
     
     if (guestTokens.length === 0) {
-      if (isSupabaseConfigured && supabase) {
+      if (isSupabaseConfigured && supabase && isUUID(merchantId)) {
         return [];
       }
       const all = getStoredOrders();
@@ -181,9 +181,11 @@ export const orderService = {
       try {
         const fetchedOrders: Order[] = [];
         for (const tokenItem of guestTokens) {
-          const order = await this.getOrderById(tokenItem.orderId, merchantId, tokenItem.trackingToken);
-          if (order) {
-            fetchedOrders.push(order);
+          if (isUUID(tokenItem.orderId)) {
+            const order = await this.getOrderById(tokenItem.orderId, merchantId, tokenItem.trackingToken);
+            if (order) {
+              fetchedOrders.push(order);
+            }
           }
         }
         return fetchedOrders;
@@ -209,7 +211,9 @@ export const orderService = {
       throw new Error('Merchant ID is required to create an order.');
     }
 
-    const generatedId = orderData.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `order-${Date.now()}`);
+    const generatedId = (orderData.id && isUUID(orderData.id)) 
+      ? orderData.id 
+      : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `order-${Date.now()}`);
     const fallbackToken = orderData.trackingToken || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : `token-${Date.now()}`);
     
     const newOrder: Order = {
@@ -222,10 +226,10 @@ export const orderService = {
       paymentStatus: orderData.paymentStatus || 'pending'
     };
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(merchantId)) {
       // Transform selectedOptions into exact JSONB structure expected by create_secure_order
       const itemsPayload = (newOrder.items || []).map((item) => ({
-        product_id: item.productId,
+        product_id: item.productId && isUUID(item.productId) ? item.productId : null,
         quantity: Math.max(1, Math.min(item.quantity || 1, 99)),
         options_description: item.optionsDescription || 'Standard',
         selected_options: item.selectedOptions || {}
@@ -261,7 +265,7 @@ export const orderService = {
       return verifiedOrder;
     }
 
-    // Local development storage when Supabase is not configured
+    // Local development storage when Supabase is not configured or in local demo mode
     saveGuestToken(newOrder.id, fallbackToken, merchantId);
     const all = getStoredOrders();
     const updated = [newOrder, ...all.filter((o) => o.id !== newOrder.id)];
@@ -281,14 +285,14 @@ export const orderService = {
       throw new Error('Order ID is required.');
     }
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(orderId)) {
       try {
         const query = supabase
           .from('orders')
           .update({ status })
           .eq('id', orderId);
 
-        if (merchantId) {
+        if (merchantId && isUUID(merchantId)) {
           query.eq('merchant_id', merchantId);
         }
 
@@ -337,14 +341,14 @@ export const orderService = {
       throw new Error('Order ID is required.');
     }
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(orderId)) {
       try {
         const query = supabase
           .from('orders')
           .update({ payment_status: paymentStatus })
           .eq('id', orderId);
 
-        if (merchantId) {
+        if (merchantId && isUUID(merchantId)) {
           query.eq('merchant_id', merchantId);
         }
 

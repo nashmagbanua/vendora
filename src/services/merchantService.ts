@@ -1,5 +1,5 @@
 import { StoreSettings, Merchant } from '../types';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, isUUID } from '../lib/supabase';
 import {
   DbMerchant,
   DbStoreSettings,
@@ -50,7 +50,7 @@ export const merchantService = {
   async getMerchant(merchantId: string = ''): Promise<Merchant | null> {
     if (!merchantId) return null;
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(merchantId)) {
       try {
         const { data, error } = await supabase
           .from('merchants')
@@ -129,7 +129,7 @@ export const merchantService = {
       };
     }
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(merchantId)) {
       try {
         const { data, error } = await supabase
           .from('store_settings')
@@ -179,7 +179,7 @@ export const merchantService = {
       merchantId: current.merchantId || merchantId
     };
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(merchantId)) {
       try {
         const dbPayload = mapStoreSettingsToDb(updated, merchantId);
         const { data, error } = await supabase

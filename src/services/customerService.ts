@@ -1,5 +1,5 @@
 import { Customer, Order } from '../types';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, isUUID } from '../lib/supabase';
 import {
   DbCustomer,
   mapDbCustomerToCustomer,
@@ -35,7 +35,7 @@ export const customerService = {
   async getCustomers(merchantId: string = ''): Promise<Customer[]> {
     if (!merchantId) return [];
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(merchantId)) {
       try {
         const { data, error } = await supabase
           .from('customers')
@@ -67,7 +67,7 @@ export const customerService = {
   async getCustomerByPhone(phone: string, merchantId: string = ''): Promise<Customer | null> {
     if (!merchantId || !phone) return null;
     const cleanPhone = phone.replace(/\s+/g, '');
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(merchantId)) {
       try {
         const { data, error } = await supabase
           .from('customers')
@@ -101,7 +101,7 @@ export const customerService = {
     }
     const cleanPhone = customerData.phone.trim();
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(merchantId)) {
       try {
         const dbPayload = mapCustomerToDb(
           { ...customerData, phone: cleanPhone },
@@ -144,7 +144,7 @@ export const customerService = {
       return updated;
     } else {
       const newCustomer: Customer = {
-        id: customerData.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `cust-${Date.now()}`),
+        id: (customerData.id && isUUID(customerData.id)) ? customerData.id : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `cust-${Date.now()}`),
         merchantId,
         fullName: customerData.fullName,
         phone: customerData.phone,

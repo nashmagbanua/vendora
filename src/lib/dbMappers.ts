@@ -9,10 +9,7 @@ import {
   OptionGroup,
   OptionItem
 } from '../types';
-
-/**
- * Raw Database Types matching supabase/migrations/001_initial_schema.sql
- */
+import { isUUID } from './supabase';
 
 export interface DbMerchant {
   id: string;
@@ -205,7 +202,7 @@ export function mapCategoryToDb(category: Partial<Category>, merchantId: string)
     merchant_id: merchantId,
     name: category.name
   };
-  if (category.id) out.id = category.id;
+  if (category.id && isUUID(category.id)) out.id = category.id;
   if (category.image !== undefined) out.image = category.image || null;
   return out;
 }
@@ -259,7 +256,7 @@ export function mapProductToDb(product: Partial<Product>, merchantId: string): P
     merchant_id: merchantId,
     name: product.name,
     category_name: product.category,
-    category_id: product.categoryId || null,
+    category_id: product.categoryId && isUUID(product.categoryId) ? product.categoryId : null,
     base_price: product.basePrice,
     description: product.description || '',
     image_url: product.image || '',
@@ -268,7 +265,7 @@ export function mapProductToDb(product: Partial<Product>, merchantId: string): P
     is_active: product.isActive ?? true,
     tag: product.tag || null
   };
-  if (product.id) out.id = product.id;
+  if (product.id && isUUID(product.id)) out.id = product.id;
   return out;
 }
 
@@ -298,7 +295,7 @@ export function mapCustomerToDb(customer: Partial<Customer>, merchantId: string)
     total_spent: customer.totalSpent ?? 0,
     last_order_date: customer.lastOrderDate || null
   };
-  if (customer.id) out.id = customer.id;
+  if (customer.id && isUUID(customer.id)) out.id = customer.id;
   return out;
 }
 
@@ -365,7 +362,7 @@ export function mapOrderToDb(order: Partial<Order>, merchantId: string): Partial
     status: order.status || 'pending',
     estimated_time: order.estimatedTime || '30-45 mins'
   };
-  if (order.id) out.id = order.id;
+  if (order.id && isUUID(order.id)) out.id = order.id;
   if (order.createdAt) out.created_at = order.createdAt;
   return out;
 }

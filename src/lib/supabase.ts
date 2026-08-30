@@ -10,6 +10,15 @@ export const isSupabaseConfigured: boolean = Boolean(
 );
 
 /**
+ * Validates if a given string matches standard UUID v4/v1 format.
+ * Prevents PostgreSQL 400 'invalid input syntax for type uuid' errors.
+ */
+export function isUUID(str: any): boolean {
+  if (typeof str !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str.trim());
+}
+
+/**
  * Supabase client instance.
  * Initialized when valid VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are present.
  * If not configured, returns null/mockable client and application runs in local/demo mode.

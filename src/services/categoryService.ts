@@ -1,5 +1,5 @@
 import { Category } from '../types';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, isUUID } from '../lib/supabase';
 import { DbCategory, mapDbCategoryToCategory, mapCategoryToDb } from '../lib/dbMappers';
 
 const CATEGORIES_STORAGE_KEY = 'vendora_categories_cache';
@@ -31,7 +31,7 @@ export const categoryService = {
   async getCategories(merchantId: string = ''): Promise<Category[]> {
     if (!merchantId) return [];
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(merchantId)) {
       try {
         const { data, error } = await supabase
           .from('categories')
@@ -67,14 +67,17 @@ export const categoryService = {
     if (!merchantId) {
       throw new Error('Merchant ID is required to create a category.');
     }
-    const generatedId = categoryData.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `cat-${Date.now()}`);
+    const generatedId = (categoryData.id && isUUID(categoryData.id)) 
+      ? categoryData.id 
+      : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `cat-${Date.now()}`);
+    
     const newCategory: Category = {
       ...categoryData,
       id: generatedId,
       merchantId
     };
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(merchantId)) {
       try {
         const dbPayload = mapCategoryToDb(newCategory, merchantId);
         const { data, error } = await supabase
@@ -111,7 +114,7 @@ export const categoryService = {
     if (!merchantId) {
       throw new Error('Merchant ID is required to update a category.');
     }
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(merchantId) && isUUID(id)) {
       try {
         const dbPayload = mapCategoryToDb(updates, merchantId);
         const { data, error } = await supabase
@@ -159,7 +162,7 @@ export const categoryService = {
     if (!merchantId) {
       throw new Error('Merchant ID is required to delete a category.');
     }
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isUUID(merchantId) && isUUID(id)) {
       try {
         await supabase
           .from('categories')
